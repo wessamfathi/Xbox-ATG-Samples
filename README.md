@@ -13,8 +13,8 @@ This repo contains game development samples written by the Microsoft Xbox Advanc
 
 # Requirements
 
-* Windows 10 Insider Preview (Build 15042 or greater)
-* Visual Studio 2017 RC with the Windows 10 Creators Update SDK Preview ([15042](https://blogs.windows.com/buildingapps/2017/02/28/windows-10-sdk-preview-build-15042-released/))
+* Windows 10 Insider Preview (Build 15052 or greater)
+* Visual Studio 2017 with the Windows 10 Creators Update SDK Preview ([15052](https://blogs.windows.com/buildingapps/2017/03/14/windows-10-sdk-preview-build-15052-released/))
 
 # Privacy Statement
 
