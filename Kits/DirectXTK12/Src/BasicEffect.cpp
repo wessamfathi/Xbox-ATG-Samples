@@ -1,12 +1,8 @@
 //--------------------------------------------------------------------------------------
 // File: BasicEffect.cpp
 //
-// THIS CODE AND INFORMATION IS PROVIDED "AS IS" WITHOUT WARRANTY OF
-// ANY KIND, EITHER EXPRESSED OR IMPLIED, INCLUDING BUT NOT LIMITED TO
-// THE IMPLIED WARRANTIES OF MERCHANTABILITY AND/OR FITNESS FOR A
-// PARTICULAR PURPOSE.
-//
 // Copyright (c) Microsoft Corporation. All rights reserved.
+// Licensed under the MIT License.
 //
 // http://go.microsoft.com/fwlink/?LinkID=615561
 //--------------------------------------------------------------------------------------
@@ -38,13 +34,13 @@ struct BasicEffectConstants
     XMMATRIX worldViewProj;
 };
 
-static_assert( ( sizeof(BasicEffectConstants) % 16 ) == 0, "CB size not padded correctly" );
+static_assert((sizeof(BasicEffectConstants) % 16) == 0, "CB size not padded correctly");
 
 
 // Traits type describes our characteristics to the EffectBase template.
 struct BasicEffectTraits
 {
-    typedef BasicEffectConstants ConstantBufferType;
+    using ConstantBufferType = BasicEffectConstants;
 
     static const int VertexShaderCount = 24;
     static const int PixelShaderCount = 10;
@@ -69,14 +65,13 @@ public:
 
     bool lightingEnabled;
     bool textureEnabled;
-    bool biasedVertexNormals;
 
     D3D12_GPU_DESCRIPTOR_HANDLE texture;
     D3D12_GPU_DESCRIPTOR_HANDLE sampler;
 
     EffectLights lights;
 
-    int GetPipelineStatePermutation(bool preferPerPixelLighting, bool vertexColorEnabled) const;
+    int GetPipelineStatePermutation(bool preferPerPixelLighting, bool vertexColorEnabled, bool biasedVertexNormals) const;
 
     void Apply(_In_ ID3D12GraphicsCommandList* commandList);
 };
@@ -173,6 +168,7 @@ namespace
 }
 
 
+template<>
 const D3D12_SHADER_BYTECODE EffectBase<BasicEffectTraits>::VertexShaderBytecode[] =
 {
     { BasicEffect_VSBasic,                     sizeof(BasicEffect_VSBasic)                     },
@@ -206,6 +202,7 @@ const D3D12_SHADER_BYTECODE EffectBase<BasicEffectTraits>::VertexShaderBytecode[
 };
 
 
+template<>
 const int EffectBase<BasicEffectTraits>::VertexShaderIndices[] =
 {
     0,      // basic
@@ -255,6 +252,7 @@ const int EffectBase<BasicEffectTraits>::VertexShaderIndices[] =
 };
 
 
+template<>
 const D3D12_SHADER_BYTECODE EffectBase<BasicEffectTraits>::PixelShaderBytecode[] =
 {
     { BasicEffect_PSBasic,                      sizeof(BasicEffect_PSBasic)                      },
@@ -272,6 +270,7 @@ const D3D12_SHADER_BYTECODE EffectBase<BasicEffectTraits>::PixelShaderBytecode[]
 };
 
 
+template<>
 const int EffectBase<BasicEffectTraits>::PixelShaderIndices[] =
 {
     0,      // basic
@@ -321,7 +320,8 @@ const int EffectBase<BasicEffectTraits>::PixelShaderIndices[] =
 };
 
 // Global pool of per-device BasicEffect resources.
-SharedResourcePool<ID3D12Device*, EffectBase<BasicEffectTraits>::DeviceResources> EffectBase<BasicEffectTraits>::deviceResourcesPool;
+template<>
+SharedResourcePool<ID3D12Device*, EffectBase<BasicEffectTraits>::DeviceResources> EffectBase<BasicEffectTraits>::deviceResourcesPool = {};
 
 
 // Constructor.
@@ -340,21 +340,20 @@ BasicEffect::Impl::Impl(_In_ ID3D12Device* device, int effectFlags, const Effect
     fog.enabled = (effectFlags & EffectFlags::Fog) != 0;
     lightingEnabled = (effectFlags & EffectFlags::Lighting) != 0;
     textureEnabled = (effectFlags & EffectFlags::Texture) != 0;
-    biasedVertexNormals = (effectFlags & EffectFlags::BiasedVertexNormals) != 0;
 
-    // Create root signature
+    // Create root signature.
     {
         D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags =
-            D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT | // Only the input assembler stage needs access to the constant buffer.
+            D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
             D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
             D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS |
             D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS;
 
         // Create root parameters and initialize first (constants)
-        CD3DX12_ROOT_PARAMETER rootParameters[RootParameterIndex::RootParameterCount];
+        CD3DX12_ROOT_PARAMETER rootParameters[RootParameterIndex::RootParameterCount] = {};
         rootParameters[RootParameterIndex::ConstantBuffer].InitAsConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_ALL);
 
-        // Root paramteer descriptor - conditionally initialized
+        // Root parameter descriptor - conditionally initialized
         CD3DX12_ROOT_SIGNATURE_DESC rsigDesc = {};
 
         if (textureEnabled)
@@ -363,8 +362,8 @@ BasicEffect::Impl::Impl(_In_ ID3D12Device* device, int effectFlags, const Effect
             CD3DX12_DESCRIPTOR_RANGE textureSRV(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0);
             CD3DX12_DESCRIPTOR_RANGE textureSampler(D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER, 1, 0);
 
-            rootParameters[RootParameterIndex::TextureSRV].InitAsDescriptorTable(1, &textureSRV);
-            rootParameters[RootParameterIndex::TextureSampler].InitAsDescriptorTable(1, &textureSampler);
+            rootParameters[RootParameterIndex::TextureSRV].InitAsDescriptorTable(1, &textureSRV, D3D12_SHADER_VISIBILITY_PIXEL);
+            rootParameters[RootParameterIndex::TextureSampler].InitAsDescriptorTable(1, &textureSampler, D3D12_SHADER_VISIBILITY_PIXEL);
 
             // use all parameters
             rsigDesc.Init(_countof(rootParameters), rootParameters, 0, nullptr, rootSignatureFlags);
@@ -380,31 +379,35 @@ BasicEffect::Impl::Impl(_In_ ID3D12Device* device, int effectFlags, const Effect
         }
     }
 
-    assert(mRootSignature != 0);
+    assert(mRootSignature != nullptr);
 
-    // Create pipeline state
+    // Create pipeline state.
     int sp = GetPipelineStatePermutation(
         (effectFlags & EffectFlags::PerPixelLightingBit) != 0,
-        (effectFlags & EffectFlags::VertexColor) != 0);
+        (effectFlags & EffectFlags::VertexColor) != 0,
+        (effectFlags & EffectFlags::BiasedVertexNormals) != 0);
     assert(sp >= 0 && sp < BasicEffectTraits::ShaderPermutationCount);
+    _Analysis_assume_(sp >= 0 && sp < BasicEffectTraits::ShaderPermutationCount);
 
     int vi = EffectBase<BasicEffectTraits>::VertexShaderIndices[sp];
     assert(vi >= 0 && vi < BasicEffectTraits::VertexShaderCount);
+    _Analysis_assume_(vi >= 0 && vi < BasicEffectTraits::VertexShaderCount);
     int pi = EffectBase<BasicEffectTraits>::PixelShaderIndices[sp];
     assert(pi >= 0 && pi < BasicEffectTraits::PixelShaderCount);
+    _Analysis_assume_(pi >= 0 && pi < BasicEffectTraits::PixelShaderCount);
 
     pipelineDescription.CreatePipelineState(
         device,
         mRootSignature,
         EffectBase<BasicEffectTraits>::VertexShaderBytecode[vi],
         EffectBase<BasicEffectTraits>::PixelShaderBytecode[pi],
-        mPipelineState.ReleaseAndGetAddressOf());
+        mPipelineState.GetAddressOf());
 
     SetDebugObjectName(mPipelineState.Get(), L"BasicEffect");
 }
 
 
-int BasicEffect::Impl::GetPipelineStatePermutation(bool preferPerPixelLighting, bool vertexColorEnabled) const
+int BasicEffect::Impl::GetPipelineStatePermutation(bool preferPerPixelLighting, bool vertexColorEnabled, bool biasedVertexNormals) const
 {
     int permutation = 0;
 
@@ -463,7 +466,6 @@ void BasicEffect::Impl::Apply(_In_ ID3D12GraphicsCommandList* commandList)
     commandList->SetGraphicsRootSignature(mRootSignature);
 
     // Set the texture
-    // **NOTE** If D3D asserts or crashes here, you probably need to call commandList->SetDescriptorHeaps() with the required descriptor heaps.
     if (textureEnabled)
     {
         if (!texture.ptr || !sampler.ptr)
@@ -471,6 +473,8 @@ void BasicEffect::Impl::Apply(_In_ ID3D12GraphicsCommandList* commandList)
             DebugTrace("ERROR: Missing texture or sampler for BasicEffect (texture %llu, sampler %llu)\n", texture.ptr, sampler.ptr);
             throw std::exception("BasicEffect");
         }
+
+        // **NOTE** If D3D asserts or crashes here, you probably need to call commandList->SetDescriptorHeaps() with the required descriptor heaps.
         commandList->SetGraphicsRootDescriptorTable(RootParameterIndex::TextureSRV, texture);
         commandList->SetGraphicsRootDescriptorTable(RootParameterIndex::TextureSampler, sampler);
     }
@@ -485,20 +489,20 @@ void BasicEffect::Impl::Apply(_In_ ID3D12GraphicsCommandList* commandList)
 
 // Public constructor.
 BasicEffect::BasicEffect(_In_ ID3D12Device* device, int effectFlags, const EffectPipelineStateDescription& pipelineDescription)
-  : pImpl(new Impl(device, effectFlags, pipelineDescription))
+  : pImpl(std::make_unique<Impl>(device, effectFlags, pipelineDescription))
 {
 }
 
 
 // Move constructor.
-BasicEffect::BasicEffect(BasicEffect&& moveFrom)
+BasicEffect::BasicEffect(BasicEffect&& moveFrom) noexcept
   : pImpl(std::move(moveFrom.pImpl))
 {
 }
 
 
 // Move assignment.
-BasicEffect& BasicEffect::operator= (BasicEffect&& moveFrom)
+BasicEffect& BasicEffect::operator= (BasicEffect&& moveFrom) noexcept
 {
     pImpl = std::move(moveFrom.pImpl);
     return *this;

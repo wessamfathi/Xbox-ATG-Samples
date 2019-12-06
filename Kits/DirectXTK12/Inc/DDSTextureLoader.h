@@ -7,12 +7,8 @@
 // a full-featured DDS file reader, writer, and texture processing pipeline see
 // the 'Texconv' sample and the 'DirectXTex' library.
 //
-// THIS CODE AND INFORMATION IS PROVIDED "AS IS" WITHOUT WARRANTY OF
-// ANY KIND, EITHER EXPRESSED OR IMPLIED, INCLUDING BUT NOT LIMITED TO
-// THE IMPLIED WARRANTIES OF MERCHANTABILITY AND/OR FITNESS FOR A
-// PARTICULAR PURPOSE.
-//
 // Copyright (c) Microsoft Corporation. All rights reserved.
+// Licensed under the MIT License.
 //
 // http://go.microsoft.com/fwlink/?LinkID=615561
 //--------------------------------------------------------------------------------------
@@ -43,7 +39,7 @@ namespace DirectX
         DDS_ALPHA_MODE_CUSTOM        = 4,
     };
 
-    enum DDS_LOADER_FLAGS
+    enum DDS_LOADER_FLAGS : uint32_t
     {
         DDS_LOADER_DEFAULT      = 0,
         DDS_LOADER_FORCE_SRGB   = 0x1,

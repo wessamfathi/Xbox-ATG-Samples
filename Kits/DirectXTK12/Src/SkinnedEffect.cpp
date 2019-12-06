@@ -1,12 +1,8 @@
 //--------------------------------------------------------------------------------------
 // File: SkinnedEffect.cpp
 //
-// THIS CODE AND INFORMATION IS PROVIDED "AS IS" WITHOUT WARRANTY OF
-// ANY KIND, EITHER EXPRESSED OR IMPLIED, INCLUDING BUT NOT LIMITED TO
-// THE IMPLIED WARRANTIES OF MERCHANTABILITY AND/OR FITNESS FOR A
-// PARTICULAR PURPOSE.
-//
 // Copyright (c) Microsoft Corporation. All rights reserved.
+// Licensed under the MIT License.
 //
 // http://go.microsoft.com/fwlink/?LinkID=615561
 //--------------------------------------------------------------------------------------
@@ -40,13 +36,13 @@ struct SkinnedEffectConstants
     XMVECTOR bones[SkinnedEffect::MaxBones][3];
 };
 
-static_assert( ( sizeof(SkinnedEffectConstants) % 16 ) == 0, "CB size not padded correctly" );
+static_assert((sizeof(SkinnedEffectConstants) % 16) == 0, "CB size not padded correctly");
 
 
 // Traits type describes our characteristics to the EffectBase template.
 struct SkinnedEffectTraits
 {
-    typedef SkinnedEffectConstants ConstantBufferType;
+    using ConstantBufferType = SkinnedEffectConstants;
 
     static const int VertexShaderCount = 12;
     static const int PixelShaderCount = 3;
@@ -69,15 +65,12 @@ public:
         RootParameterCount
     };
 
-    int weightsPerVertex;
-    bool biasedVertexNormals;
-    
     D3D12_GPU_DESCRIPTOR_HANDLE texture;
     D3D12_GPU_DESCRIPTOR_HANDLE sampler;
 
     EffectLights lights;
 
-    int GetPipelineStatePermutation(bool preferPerPixelLighting) const;
+    int GetPipelineStatePermutation(bool preferPerPixelLighting, int weightsPerVertex, bool biasedVertexNormals) const;
 
     void Apply(_In_ ID3D12GraphicsCommandList* commandList);
 };
@@ -130,6 +123,7 @@ namespace
 }
 
 
+template<>
 const D3D12_SHADER_BYTECODE EffectBase<SkinnedEffectTraits>::VertexShaderBytecode[] =
 {
     { SkinnedEffect_VSSkinnedVertexLightingOneBone,     sizeof(SkinnedEffect_VSSkinnedVertexLightingOneBone)     },
@@ -150,6 +144,7 @@ const D3D12_SHADER_BYTECODE EffectBase<SkinnedEffectTraits>::VertexShaderBytecod
 };
 
 
+template<>
 const int EffectBase<SkinnedEffectTraits>::VertexShaderIndices[] =
 {
     0,      // vertex lighting, one bone
@@ -182,6 +177,7 @@ const int EffectBase<SkinnedEffectTraits>::VertexShaderIndices[] =
 };
 
 
+template<>
 const D3D12_SHADER_BYTECODE EffectBase<SkinnedEffectTraits>::PixelShaderBytecode[] =
 {
     { SkinnedEffect_PSSkinnedVertexLighting,      sizeof(SkinnedEffect_PSSkinnedVertexLighting)      },
@@ -190,6 +186,7 @@ const D3D12_SHADER_BYTECODE EffectBase<SkinnedEffectTraits>::PixelShaderBytecode
 };
 
 
+template<>
 const int EffectBase<SkinnedEffectTraits>::PixelShaderIndices[] =
 {
     0,      // vertex lighting, one bone
@@ -223,20 +220,20 @@ const int EffectBase<SkinnedEffectTraits>::PixelShaderIndices[] =
 
 
 // Global pool of per-device SkinnedEffect resources.
-SharedResourcePool<ID3D12Device*, EffectBase<SkinnedEffectTraits>::DeviceResources> EffectBase<SkinnedEffectTraits>::deviceResourcesPool;
+template<>
+SharedResourcePool<ID3D12Device*, EffectBase<SkinnedEffectTraits>::DeviceResources> EffectBase<SkinnedEffectTraits>::deviceResourcesPool = {};
 
 
 // Constructor.
 SkinnedEffect::Impl::Impl(_In_ ID3D12Device* device, int effectFlags, const EffectPipelineStateDescription& pipelineDescription, int weightsPerVertex)
-  : EffectBase(device),
-    weightsPerVertex(weightsPerVertex),
+    : EffectBase(device),
     texture{},
     sampler{}
 {
-    static_assert( _countof(EffectBase<SkinnedEffectTraits>::VertexShaderIndices) == SkinnedEffectTraits::ShaderPermutationCount, "array/max mismatch" );
-    static_assert( _countof(EffectBase<SkinnedEffectTraits>::VertexShaderBytecode) == SkinnedEffectTraits::VertexShaderCount, "array/max mismatch" );
-    static_assert( _countof(EffectBase<SkinnedEffectTraits>::PixelShaderBytecode) == SkinnedEffectTraits::PixelShaderCount, "array/max mismatch" );
-    static_assert( _countof(EffectBase<SkinnedEffectTraits>::PixelShaderIndices) == SkinnedEffectTraits::ShaderPermutationCount, "array/max mismatch" );
+    static_assert(_countof(EffectBase<SkinnedEffectTraits>::VertexShaderIndices) == SkinnedEffectTraits::ShaderPermutationCount, "array/max mismatch");
+    static_assert(_countof(EffectBase<SkinnedEffectTraits>::VertexShaderBytecode) == SkinnedEffectTraits::VertexShaderCount, "array/max mismatch");
+    static_assert(_countof(EffectBase<SkinnedEffectTraits>::PixelShaderBytecode) == SkinnedEffectTraits::PixelShaderCount, "array/max mismatch");
+    static_assert(_countof(EffectBase<SkinnedEffectTraits>::PixelShaderIndices) == SkinnedEffectTraits::ShaderPermutationCount, "array/max mismatch");
 
     if ((weightsPerVertex != 1) &&
         (weightsPerVertex != 2) &&
@@ -255,10 +252,10 @@ SkinnedEffect::Impl::Impl(_In_ ID3D12Device* device, int effectFlags, const Effe
         constants.bones[i][2] = g_XMIdentityR2;
     }
 
-    // Create root signature
+    // Create root signature.
     {
         D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags =
-            D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT | // Only the input assembler stage needs access to the constant buffer.
+            D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
             D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
             D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS |
             D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS;
@@ -266,9 +263,9 @@ SkinnedEffect::Impl::Impl(_In_ ID3D12Device* device, int effectFlags, const Effe
         CD3DX12_DESCRIPTOR_RANGE textureSrvDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0);
         CD3DX12_DESCRIPTOR_RANGE textureSamplerDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER, 1, 0);
 
-        CD3DX12_ROOT_PARAMETER rootParameters[RootParameterIndex::RootParameterCount];
-        rootParameters[RootParameterIndex::TextureSRV].InitAsDescriptorTable(1, &textureSrvDescriptorRange);
-        rootParameters[RootParameterIndex::TextureSampler].InitAsDescriptorTable(1, &textureSamplerDescriptorRange);
+        CD3DX12_ROOT_PARAMETER rootParameters[RootParameterIndex::RootParameterCount] = {};
+        rootParameters[RootParameterIndex::TextureSRV].InitAsDescriptorTable(1, &textureSrvDescriptorRange, D3D12_SHADER_VISIBILITY_PIXEL);
+        rootParameters[RootParameterIndex::TextureSampler].InitAsDescriptorTable(1, &textureSamplerDescriptorRange, D3D12_SHADER_VISIBILITY_PIXEL);
         rootParameters[RootParameterIndex::ConstantBuffer].InitAsConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_ALL);
 
         CD3DX12_ROOT_SIGNATURE_DESC rsigDesc = {};
@@ -277,10 +274,9 @@ SkinnedEffect::Impl::Impl(_In_ ID3D12Device* device, int effectFlags, const Effe
         mRootSignature = GetRootSignature(0, rsigDesc);
     }
 
-    assert(mRootSignature != 0);
+    assert(mRootSignature != nullptr);
 
     fog.enabled = (effectFlags & EffectFlags::Fog) != 0;
-    biasedVertexNormals = (effectFlags & EffectFlags::BiasedVertexNormals) != 0;
 
     if (effectFlags & EffectFlags::VertexColor)
     {
@@ -288,28 +284,33 @@ SkinnedEffect::Impl::Impl(_In_ ID3D12Device* device, int effectFlags, const Effe
         throw std::invalid_argument("SkinnedEffect");
     }
 
-    // Create pipeline state
+    // Create pipeline state.
     int sp = GetPipelineStatePermutation(
-        (effectFlags & EffectFlags::PerPixelLightingBit) != 0);
+        (effectFlags & EffectFlags::PerPixelLightingBit) != 0,
+        weightsPerVertex,
+        (effectFlags & EffectFlags::BiasedVertexNormals) != 0);
     assert(sp >= 0 && sp < SkinnedEffectTraits::ShaderPermutationCount);
+    _Analysis_assume_(sp >= 0 && sp < SkinnedEffectTraits::ShaderPermutationCount);
 
     int vi = EffectBase<SkinnedEffectTraits>::VertexShaderIndices[sp];
     assert(vi >= 0 && vi < SkinnedEffectTraits::VertexShaderCount);
+    _Analysis_assume_(vi >= 0 && vi < SkinnedEffectTraits::VertexShaderCount);
     int pi = EffectBase<SkinnedEffectTraits>::PixelShaderIndices[sp];
     assert(pi >= 0 && pi < SkinnedEffectTraits::PixelShaderCount);
+    _Analysis_assume_(pi >= 0 && pi < SkinnedEffectTraits::PixelShaderCount);
 
     pipelineDescription.CreatePipelineState(
         device,
         mRootSignature,
         EffectBase<SkinnedEffectTraits>::VertexShaderBytecode[vi],
         EffectBase<SkinnedEffectTraits>::PixelShaderBytecode[pi],
-        mPipelineState.ReleaseAndGetAddressOf());
+        mPipelineState.GetAddressOf());
 
     SetDebugObjectName(mPipelineState.Get(), L"SkinnedEffect");
 }
 
 
-int SkinnedEffect::Impl::GetPipelineStatePermutation(bool preferPerPixelLighting) const
+int SkinnedEffect::Impl::GetPipelineStatePermutation(bool preferPerPixelLighting, int weightsPerVertex, bool biasedVertexNormals) const
 {
     int permutation = 0;
 
@@ -359,12 +360,13 @@ void SkinnedEffect::Impl::Apply(_In_ ID3D12GraphicsCommandList* commandList)
     commandList->SetGraphicsRootSignature(mRootSignature);
 
     // Set the texture
-    // **NOTE** If D3D asserts or crashes here, you probably need to call commandList->SetDescriptorHeaps() with the required descriptor heaps.
     if (!texture.ptr || !sampler.ptr)
     {
         DebugTrace("ERROR: Missing texture or sampler for SkinnedEffect (texture %llu, sampler %llu)\n", texture.ptr, sampler.ptr);
         throw std::exception("SkinnedEffect");
     }
+
+    // **NOTE** If D3D asserts or crashes here, you probably need to call commandList->SetDescriptorHeaps() with the required descriptor heaps.
     commandList->SetGraphicsRootDescriptorTable(RootParameterIndex::TextureSRV, texture);
     commandList->SetGraphicsRootDescriptorTable(RootParameterIndex::TextureSampler, sampler);
     
@@ -378,20 +380,20 @@ void SkinnedEffect::Impl::Apply(_In_ ID3D12GraphicsCommandList* commandList)
 
 // Public constructor.
 SkinnedEffect::SkinnedEffect(_In_ ID3D12Device* device, int effectFlags, const EffectPipelineStateDescription& pipelineDescription, int weightsPerVertex)
-  : pImpl(new Impl(device, effectFlags, pipelineDescription, weightsPerVertex))
+  : pImpl(std::make_unique<Impl>(device, effectFlags, pipelineDescription, weightsPerVertex))
 {
 }
 
 
 // Move constructor.
-SkinnedEffect::SkinnedEffect(SkinnedEffect&& moveFrom)
+SkinnedEffect::SkinnedEffect(SkinnedEffect&& moveFrom) noexcept
   : pImpl(std::move(moveFrom.pImpl))
 {
 }
 
 
 // Move assignment.
-SkinnedEffect& SkinnedEffect::operator= (SkinnedEffect&& moveFrom)
+SkinnedEffect& SkinnedEffect::operator= (SkinnedEffect&& moveFrom) noexcept
 {
     pImpl = std::move(moveFrom.pImpl);
     return *this;
@@ -609,8 +611,6 @@ void SkinnedEffect::SetBoneTransforms(_In_reads_(count) XMMATRIX const* value, s
 void SkinnedEffect::ResetBoneTransforms()
 {
     auto boneConstant = pImpl->constants.bones;
-
-    XMMATRIX id = XMMatrixIdentity();
 
     for(size_t i = 0; i < MaxBones; ++i)
     {

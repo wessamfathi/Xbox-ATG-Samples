@@ -1,9 +1,5 @@
-// THIS CODE AND INFORMATION IS PROVIDED "AS IS" WITHOUT WARRANTY OF
-// ANY KIND, EITHER EXPRESSED OR IMPLIED, INCLUDING BUT NOT LIMITED TO
-// THE IMPLIED WARRANTIES OF MERCHANTABILITY AND/OR FITNESS FOR A
-// PARTICULAR PURPOSE.
-//
 // Copyright (c) Microsoft Corporation. All rights reserved.
+// Licensed under the MIT License.
 //
 // http://go.microsoft.com/fwlink/?LinkID=615561
 // http://create.msdn.com/en-US/education/catalog/sample/stock_effects
@@ -41,6 +37,7 @@ cbuffer Parameters : register(b0)
 #include "Common.fxh"
 #include "RootSig.fxh"
 #include "Lighting.fxh"
+#include "Utilities.fxh"
 
 [RootSignature(MainRS)]
 float3 Skin(inout VSInputNmTxWeights vin, float3 normal, uniform int boneCount)

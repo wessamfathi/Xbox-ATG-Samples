@@ -1,12 +1,8 @@
 //--------------------------------------------------------------------------------------
 // File: GeometricPrimitive.cpp
 //
-// THIS CODE AND INFORMATION IS PROVIDED "AS IS" WITHOUT WARRANTY OF
-// ANY KIND, EITHER EXPRESSED OR IMPLIED, INCLUDING BUT NOT LIMITED TO
-// THE IMPLIED WARRANTIES OF MERCHANTABILITY AND/OR FITNESS FOR A
-// PARTICULAR PURPOSE.
-//
 // Copyright (c) Microsoft Corporation. All rights reserved.
+// Licensed under the MIT License.
 //
 // http://go.microsoft.com/fwlink/?LinkId=248929
 //--------------------------------------------------------------------------------------
@@ -27,13 +23,18 @@ namespace
 {
     // Helper for creating a D3D vertex or index buffer.
     template<typename T>
-    static void CreateBuffer(_In_ ID3D11Device* device, T const& data, D3D11_BIND_FLAG bindFlags, _Outptr_ ID3D11Buffer** pBuffer)
+    void CreateBuffer(_In_ ID3D11Device* device, T const& data, D3D11_BIND_FLAG bindFlags, _Outptr_ ID3D11Buffer** pBuffer)
     {
-        assert(pBuffer != 0);
+        assert(pBuffer != nullptr);
+
+        uint64_t sizeInBytes = uint64_t(data.size()) * sizeof(typename T::value_type);
+
+        if (sizeInBytes > uint64_t(D3D11_REQ_RESOURCE_SIZE_IN_MEGABYTES_EXPRESSION_A_TERM * 1024u * 1024u))
+            throw std::exception("Buffer too large for DirectX 11");
 
         D3D11_BUFFER_DESC bufferDesc = {};
 
-        bufferDesc.ByteWidth = (UINT)data.size() * sizeof(T::value_type);
+        bufferDesc.ByteWidth = static_cast<UINT>(sizeInBytes);
         bufferDesc.BindFlags = bindFlags;
         bufferDesc.Usage = D3D11_USAGE_DEFAULT;
 
@@ -45,7 +46,8 @@ namespace
             device->CreateBuffer(&bufferDesc, &dataDesc, pBuffer)
         );
 
-        _Analysis_assume_(*pBuffer != 0);
+        assert(pBuffer != nullptr && *pBuffer != nullptr);
+        _Analysis_assume_(pBuffer != nullptr && *pBuffer != nullptr);
 
         SetDebugObjectName(*pBuffer, "DirectXTK:GeometricPrimitive");
     }
@@ -54,7 +56,7 @@ namespace
     // Helper for creating a D3D input layout.
     void CreateInputLayout(_In_ ID3D11Device* device, IEffect* effect, _Outptr_ ID3D11InputLayout** pInputLayout)
     {
-        assert(pInputLayout != 0);
+        assert(pInputLayout != nullptr);
 
         void const* shaderByteCode;
         size_t byteCodeLength;
@@ -62,13 +64,15 @@ namespace
         effect->GetVertexShaderBytecode(&shaderByteCode, &byteCodeLength);
 
         ThrowIfFailed(
-            device->CreateInputLayout(VertexPositionNormalTexture::InputElements,
-                VertexPositionNormalTexture::InputElementCount,
-                shaderByteCode, byteCodeLength,
-                pInputLayout)
+            device->CreateInputLayout(
+            GeometricPrimitive::VertexType::InputElements,
+            GeometricPrimitive::VertexType::InputElementCount,
+            shaderByteCode, byteCodeLength,
+            pInputLayout)
         );
 
-        _Analysis_assume_(*pInputLayout != 0);
+        assert(pInputLayout != nullptr && *pInputLayout != nullptr);
+        _Analysis_assume_(pInputLayout != nullptr && *pInputLayout != nullptr);
 
         SetDebugObjectName(*pInputLayout, "DirectXTK:GeometricPrimitive");
     }
@@ -79,11 +83,13 @@ namespace
 class GeometricPrimitive::Impl
 {
 public:
+    Impl() noexcept : mIndexCount(0) {}
+
     void Initialize(_In_ ID3D11DeviceContext* deviceContext, const VertexCollection& vertices, const IndexCollection& indices);
 
-    void XM_CALLCONV Draw(FXMMATRIX world, CXMMATRIX view, CXMMATRIX projection, FXMVECTOR color, _In_opt_ ID3D11ShaderResourceView* texture, bool wireframe, _In_opt_ std::function<void()> setCustomState) const;
+    void XM_CALLCONV Draw(FXMMATRIX world, CXMMATRIX view, CXMMATRIX projection, FXMVECTOR color, _In_opt_ ID3D11ShaderResourceView* texture, bool wireframe, std::function<void()>& setCustomState) const;
 
-    void Draw(_In_ IEffect* effect, _In_ ID3D11InputLayout* inputLayout, bool alpha, bool wireframe, _In_opt_ std::function<void()> setCustomState) const;
+    void Draw(_In_ IEffect* effect, _In_ ID3D11InputLayout* inputLayout, bool alpha, bool wireframe, std::function<void()>& setCustomState) const;
 
     void CreateInputLayout(_In_ IEffect* effect, _Outptr_ ID3D11InputLayout** inputLayout) const;
 
@@ -101,7 +107,7 @@ private:
 
         void PrepareForRendering(bool alpha, bool wireframe) const;
 
-        ComPtr<ID3D11DeviceContext> deviceContext;
+        ComPtr<ID3D11DeviceContext> mDeviceContext;
         std::unique_ptr<BasicEffect> effect;
 
         ComPtr<ID3D11InputLayout> inputLayoutTextured;
@@ -124,7 +130,7 @@ SharedResourcePool<ID3D11DeviceContext*, GeometricPrimitive::Impl::SharedResourc
 
 // Per-device-context constructor.
 GeometricPrimitive::Impl::SharedResources::SharedResources(_In_ ID3D11DeviceContext* deviceContext)
-    : deviceContext(deviceContext)
+    : mDeviceContext(deviceContext)
 {
     ComPtr<ID3D11Device> device;
     deviceContext->GetDevice(&device);
@@ -166,18 +172,18 @@ void GeometricPrimitive::Impl::SharedResources::PrepareForRendering(bool alpha, 
         depthStencilState = stateObjects->DepthDefault();
     }
 
-    deviceContext->OMSetBlendState(blendState, nullptr, 0xFFFFFFFF);
-    deviceContext->OMSetDepthStencilState(depthStencilState, 0);
+    mDeviceContext->OMSetBlendState(blendState, nullptr, 0xFFFFFFFF);
+    mDeviceContext->OMSetDepthStencilState(depthStencilState, 0);
 
     // Set the rasterizer state.
     if (wireframe)
-        deviceContext->RSSetState(stateObjects->Wireframe());
+        mDeviceContext->RSSetState(stateObjects->Wireframe());
     else
-        deviceContext->RSSetState(stateObjects->CullCounterClockwise());
+        mDeviceContext->RSSetState(stateObjects->CullCounterClockwise());
 
     ID3D11SamplerState* samplerState = stateObjects->LinearWrap();
 
-    deviceContext->PSSetSamplers(0, 1, &samplerState);
+    mDeviceContext->PSSetSamplers(0, 1, &samplerState);
 }
 
 
@@ -187,6 +193,9 @@ void GeometricPrimitive::Impl::Initialize(ID3D11DeviceContext* deviceContext, co
 {
     if (vertices.size() >= USHRT_MAX)
         throw std::exception("Too many vertices for 16-bit index buffer");
+
+    if (indices.size() > UINT32_MAX)
+        throw std::exception("Too many indices");
 
     mResources = sharedResourcesPool.DemandCreate(deviceContext);
 
@@ -209,11 +218,11 @@ void XM_CALLCONV GeometricPrimitive::Impl::Draw(
     FXMVECTOR color,
     ID3D11ShaderResourceView* texture,
     bool wireframe,
-    std::function<void()> setCustomState) const
+    std::function<void()>& setCustomState) const
 {
-    assert(mResources != 0);
+    assert(mResources);
     auto effect = mResources->effect.get();
-    assert(effect != 0);
+    assert(effect != nullptr);
 
     ID3D11InputLayout *inputLayout;
     if (texture)
@@ -247,26 +256,26 @@ void GeometricPrimitive::Impl::Draw(
     ID3D11InputLayout* inputLayout,
     bool alpha,
     bool wireframe,
-    std::function<void()> setCustomState) const
+    std::function<void()>& setCustomState) const
 {
-    assert(mResources != 0);
-    auto deviceContext = mResources->deviceContext.Get();
-    assert(deviceContext != 0);
+    assert(mResources);
+    auto deviceContext = mResources->mDeviceContext.Get();
+    assert(deviceContext != nullptr);
 
     // Set state objects.
     mResources->PrepareForRendering(alpha, wireframe);
 
     // Set input layout.
-    assert(inputLayout != 0);
+    assert(inputLayout != nullptr);
     deviceContext->IASetInputLayout(inputLayout);
 
     // Activate our shaders, constant buffers, texture, etc.
-    assert(effect != 0);
+    assert(effect != nullptr);
     effect->Apply(deviceContext);
 
     // Set the vertex and index buffer.
     auto vertexBuffer = mVertexBuffer.Get();
-    UINT vertexStride = sizeof(VertexPositionNormalTexture);
+    UINT vertexStride = sizeof(VertexType);
     UINT vertexOffset = 0;
 
     deviceContext->IASetVertexBuffers(0, 1, &vertexBuffer, &vertexStride, &vertexOffset);
@@ -290,12 +299,12 @@ void GeometricPrimitive::Impl::Draw(
 _Use_decl_annotations_
 void GeometricPrimitive::Impl::CreateInputLayout(IEffect* effect, ID3D11InputLayout** inputLayout) const
 {
-    assert(effect != 0);
-    assert(inputLayout != 0);
+    assert(effect != nullptr);
+    assert(inputLayout != nullptr);
 
-    assert(mResources != 0);
-    auto deviceContext = mResources->deviceContext.Get();
-    assert(deviceContext != 0);
+    assert(mResources);
+    auto deviceContext = mResources->mDeviceContext.Get();
+    assert(deviceContext != nullptr);
 
     ComPtr<ID3D11Device> device;
     deviceContext->GetDevice(&device);
@@ -309,8 +318,8 @@ void GeometricPrimitive::Impl::CreateInputLayout(IEffect* effect, ID3D11InputLay
 //--------------------------------------------------------------------------------------
 
 // Constructor.
-GeometricPrimitive::GeometricPrimitive()
-    : pImpl(new Impl())
+GeometricPrimitive::GeometricPrimitive() noexcept(false)
+    : pImpl(std::make_unique<Impl>())
 {
 }
 
@@ -378,7 +387,7 @@ std::unique_ptr<GeometricPrimitive> GeometricPrimitive::CreateCube(
 }
 
 void GeometricPrimitive::CreateCube(
-    std::vector<VertexPositionNormalTexture>& vertices,
+    std::vector<VertexType>& vertices,
     std::vector<uint16_t>& indices,
     float size,
     bool rhcoords)
@@ -408,7 +417,7 @@ std::unique_ptr<GeometricPrimitive> GeometricPrimitive::CreateBox(
 }
 
 void GeometricPrimitive::CreateBox(
-    std::vector<VertexPositionNormalTexture>& vertices,
+    std::vector<VertexType>& vertices,
     std::vector<uint16_t>& indices,
     const XMFLOAT3& size,
     bool rhcoords,
@@ -443,7 +452,7 @@ std::unique_ptr<GeometricPrimitive> GeometricPrimitive::CreateSphere(
 }
 
 void GeometricPrimitive::CreateSphere(
-    std::vector<VertexPositionNormalTexture>& vertices,
+    std::vector<VertexType>& vertices,
     std::vector<uint16_t>& indices,
     float diameter,
     size_t tessellation,
@@ -478,7 +487,7 @@ std::unique_ptr<GeometricPrimitive> GeometricPrimitive::CreateGeoSphere(
 }
 
 void GeometricPrimitive::CreateGeoSphere(
-    std::vector<VertexPositionNormalTexture>& vertices,
+    std::vector<VertexType>& vertices,
     std::vector<uint16_t>& indices,
     float diameter,
     size_t tessellation, bool rhcoords)
@@ -513,7 +522,7 @@ std::unique_ptr<GeometricPrimitive> GeometricPrimitive::CreateCylinder(
 }
 
 void GeometricPrimitive::CreateCylinder(
-    std::vector<VertexPositionNormalTexture>& vertices,
+    std::vector<VertexType>& vertices,
     std::vector<uint16_t>& indices,
     float height,
     float diameter,
@@ -546,7 +555,7 @@ std::unique_ptr<GeometricPrimitive> GeometricPrimitive::CreateCone(
 }
 
 void GeometricPrimitive::CreateCone(
-    std::vector<VertexPositionNormalTexture>& vertices,
+    std::vector<VertexType>& vertices,
     std::vector<uint16_t>& indices,
     float diameter,
     float height,
@@ -582,7 +591,7 @@ std::unique_ptr<GeometricPrimitive> GeometricPrimitive::CreateTorus(
 }
 
 void GeometricPrimitive::CreateTorus(
-    std::vector<VertexPositionNormalTexture>& vertices,
+    std::vector<VertexType>& vertices,
     std::vector<uint16_t>& indices,
     float diameter,
     float thickness,
@@ -616,7 +625,7 @@ std::unique_ptr<GeometricPrimitive> GeometricPrimitive::CreateTetrahedron(
 }
 
 void GeometricPrimitive::CreateTetrahedron(
-    std::vector<VertexPositionNormalTexture>& vertices,
+    std::vector<VertexType>& vertices,
     std::vector<uint16_t>& indices,
     float size,
     bool rhcoords)
@@ -648,7 +657,7 @@ std::unique_ptr<GeometricPrimitive> GeometricPrimitive::CreateOctahedron(
 }
 
 void GeometricPrimitive::CreateOctahedron(
-    std::vector<VertexPositionNormalTexture>& vertices,
+    std::vector<VertexType>& vertices,
     std::vector<uint16_t>& indices,
     float size,
     bool rhcoords)
@@ -680,7 +689,7 @@ std::unique_ptr<GeometricPrimitive> GeometricPrimitive::CreateDodecahedron(
 }
 
 void GeometricPrimitive::CreateDodecahedron(
-    std::vector<VertexPositionNormalTexture>& vertices,
+    std::vector<VertexType>& vertices,
     std::vector<uint16_t>& indices,
     float size,
     bool rhcoords)
@@ -712,7 +721,7 @@ std::unique_ptr<GeometricPrimitive> GeometricPrimitive::CreateIcosahedron(
 }
 
 void GeometricPrimitive::CreateIcosahedron(
-    std::vector<VertexPositionNormalTexture>& vertices,
+    std::vector<VertexType>& vertices,
     std::vector<uint16_t>& indices,
     float size,
     bool rhcoords)
@@ -745,7 +754,7 @@ std::unique_ptr<GeometricPrimitive> GeometricPrimitive::CreateTeapot(
 }
 
 void GeometricPrimitive::CreateTeapot(
-    std::vector<VertexPositionNormalTexture>& vertices,
+    std::vector<VertexType>& vertices,
     std::vector<uint16_t>& indices,
     float size,
     size_t tessellation,
@@ -762,7 +771,7 @@ void GeometricPrimitive::CreateTeapot(
 _Use_decl_annotations_
 std::unique_ptr<GeometricPrimitive> GeometricPrimitive::CreateCustom(
     ID3D11DeviceContext* deviceContext,
-    const std::vector<VertexPositionNormalTexture>& vertices,
+    const std::vector<VertexType>& vertices,
     const std::vector<uint16_t>& indices)
 {
     // Extra validation

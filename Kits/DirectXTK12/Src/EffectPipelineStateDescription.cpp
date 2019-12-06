@@ -1,12 +1,8 @@
 //--------------------------------------------------------------------------------------
 // File: EffectPipelineStateDescription.cpp
 //
-// THIS CODE AND INFORMATION IS PROVIDED "AS IS" WITHOUT WARRANTY OF
-// ANY KIND, EITHER EXPRESSED OR IMPLIED, INCLUDING BUT NOT LIMITED TO
-// THE IMPLIED WARRANTIES OF MERCHANTABILITY AND/OR FITNESS FOR A
-// PARTICULAR PURPOSE.
-//
 // Copyright (c) Microsoft Corporation. All rights reserved.
+// Licensed under the MIT License.
 //
 // http://go.microsoft.com/fwlink/?LinkID=615561
 //--------------------------------------------------------------------------------------
@@ -95,22 +91,8 @@ void EffectPipelineStateDescription::CreatePipelineState(
     const D3D12_SHADER_BYTECODE& pixelShader,
     _Outptr_ ID3D12PipelineState** pPipelineState) const
 {
-    D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
+    auto psoDesc = GetDesc();
     psoDesc.pRootSignature = rootSignature;
-    psoDesc.BlendState = blendDesc;
-    psoDesc.DepthStencilState = depthStencilDesc;
-    psoDesc.RasterizerState = rasterizerDesc;
-    psoDesc.DSVFormat = renderTargetState.dsvFormat;
-    psoDesc.NodeMask = renderTargetState.nodeMask;
-    psoDesc.NumRenderTargets = renderTargetState.numRenderTargets;
-    memcpy(psoDesc.RTVFormats, renderTargetState.rtvFormats, sizeof(psoDesc.RTVFormats));
-    psoDesc.SampleDesc = renderTargetState.sampleDesc;
-    psoDesc.SampleMask = renderTargetState.sampleMask;
-    psoDesc.InputLayout = inputLayout;
-    psoDesc.IBStripCutValue = stripCutValue;
-    psoDesc.PrimitiveTopologyType = primitiveTopology;
-    psoDesc.Flags = D3D12_PIPELINE_STATE_FLAG_NONE;
-
     psoDesc.VS = vertexShader;
     psoDesc.PS = pixelShader;
 
@@ -120,7 +102,7 @@ void EffectPipelineStateDescription::CreatePipelineState(
 
     if (FAILED(hr))
     { 
-        DebugTrace("CreatePipelineState failed to create a PSO. Enable the Direct3D Debug Layer for more information (%08X)\n", hr);
+        DebugTrace("ERROR: CreatePipelineState failed to create a PSO. Enable the Direct3D Debug Layer for more information (%08X)\n", hr);
         throw std::exception("CreateGraphicsPipelineState");
     }
 }

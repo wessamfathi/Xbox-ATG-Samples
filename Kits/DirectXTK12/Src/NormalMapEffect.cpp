@@ -1,12 +1,8 @@
 //--------------------------------------------------------------------------------------
 // File: NormalMapEffect.cpp
 //
-// THIS CODE AND INFORMATION IS PROVIDED "AS IS" WITHOUT WARRANTY OF
-// ANY KIND, EITHER EXPRESSED OR IMPLIED, INCLUDING BUT NOT LIMITED TO
-// THE IMPLIED WARRANTIES OF MERCHANTABILITY AND/OR FITNESS FOR A
-// PARTICULAR PURPOSE.
-//
 // Copyright (c) Microsoft Corporation. All rights reserved.
+// Licensed under the MIT License.
 //
 // http://go.microsoft.com/fwlink/?LinkID=615561
 //--------------------------------------------------------------------------------------
@@ -38,18 +34,18 @@ struct NormalMapEffectConstants
     XMMATRIX worldViewProj;
 };
 
-static_assert( ( sizeof(NormalMapEffectConstants) % 16 ) == 0, "CB size not padded correctly" );
+static_assert((sizeof(NormalMapEffectConstants) % 16) == 0, "CB size not padded correctly");
 
 
 // Traits type describes our characteristics to the EffectBase template.
 struct NormalMapEffectTraits
 {
-    typedef NormalMapEffectConstants ConstantBufferType;
+    using ConstantBufferType = NormalMapEffectConstants;
 
-    static const int VertexShaderCount = 4;
+    static const int VertexShaderCount = 8;
     static const int PixelShaderCount = 4;
     static const int ShaderPermutationCount = 16;
-    static const int RootSignatureCount = 1;
+    static const int RootSignatureCount = 2;
 };
 
 
@@ -62,15 +58,14 @@ public:
     enum RootParameterIndex
     {
         TextureSRV,
-        TextureSpecularSRV,
         TextureNormalSRV,
         TextureSampler,
         ConstantBuffer,
+        TextureSpecularSRV,
         RootParameterCount
     };
 
     bool specularMap;
-    bool biasedVertexNormals;
 
     D3D12_GPU_DESCRIPTOR_HANDLE texture;
     D3D12_GPU_DESCRIPTOR_HANDLE specular;
@@ -79,7 +74,7 @@ public:
 
     EffectLights lights;
 
-    int GetPipelineStatePermutation(bool vertexColorEnabled) const;
+    int GetPipelineStatePermutation(bool vertexColorEnabled, bool biasedVertexNormals) const;
 
     void Apply(_In_ ID3D12GraphicsCommandList* commandList);
 };
@@ -91,9 +86,13 @@ namespace
 #if defined(_XBOX_ONE) && defined(_TITLE)
     #include "Shaders/Compiled/XboxOneNormalMapEffect_VSNormalPixelLightingTx.inc"
     #include "Shaders/Compiled/XboxOneNormalMapEffect_VSNormalPixelLightingTxVc.inc"
+    #include "Shaders/Compiled/XboxOneNormalMapEffect_VSNormalPixelLightingTxNoSpec.inc"
+    #include "Shaders/Compiled/XboxOneNormalMapEffect_VSNormalPixelLightingTxVcNoSpec.inc"
 
     #include "Shaders/Compiled/XboxOneNormalMapEffect_VSNormalPixelLightingTxBn.inc"
     #include "Shaders/Compiled/XboxOneNormalMapEffect_VSNormalPixelLightingTxVcBn.inc"
+    #include "Shaders/Compiled/XboxOneNormalMapEffect_VSNormalPixelLightingTxNoSpecBn.inc"
+    #include "Shaders/Compiled/XboxOneNormalMapEffect_VSNormalPixelLightingTxVcNoSpecBn.inc"
 
     #include "Shaders/Compiled/XboxOneNormalMapEffect_PSNormalPixelLightingTx.inc"
     #include "Shaders/Compiled/XboxOneNormalMapEffect_PSNormalPixelLightingTxNoFog.inc"
@@ -102,9 +101,13 @@ namespace
 #else    
     #include "Shaders/Compiled/NormalMapEffect_VSNormalPixelLightingTx.inc"
     #include "Shaders/Compiled/NormalMapEffect_VSNormalPixelLightingTxVc.inc"
+    #include "Shaders/Compiled/NormalMapEffect_VSNormalPixelLightingTxNoSpec.inc"
+    #include "Shaders/Compiled/NormalMapEffect_VSNormalPixelLightingTxVcNoSpec.inc"
 
     #include "Shaders/Compiled/NormalMapEffect_VSNormalPixelLightingTxBn.inc"
     #include "Shaders/Compiled/NormalMapEffect_VSNormalPixelLightingTxVcBn.inc"
+    #include "Shaders/Compiled/NormalMapEffect_VSNormalPixelLightingTxNoSpecBn.inc"
+    #include "Shaders/Compiled/NormalMapEffect_VSNormalPixelLightingTxVcNoSpecBn.inc"
 
     #include "Shaders/Compiled/NormalMapEffect_PSNormalPixelLightingTx.inc"
     #include "Shaders/Compiled/NormalMapEffect_PSNormalPixelLightingTxNoFog.inc"
@@ -114,16 +117,24 @@ namespace
 }
 
 
+template<>
 const D3D12_SHADER_BYTECODE EffectBase<NormalMapEffectTraits>::VertexShaderBytecode[] =
 {
-    { NormalMapEffect_VSNormalPixelLightingTx,     sizeof(NormalMapEffect_VSNormalPixelLightingTx)     },
-    { NormalMapEffect_VSNormalPixelLightingTxVc,   sizeof(NormalMapEffect_VSNormalPixelLightingTxVc)   },
+    { NormalMapEffect_VSNormalPixelLightingTx,           sizeof(NormalMapEffect_VSNormalPixelLightingTx)           },
+    { NormalMapEffect_VSNormalPixelLightingTxVc,         sizeof(NormalMapEffect_VSNormalPixelLightingTxVc)         },
 
-    { NormalMapEffect_VSNormalPixelLightingTxBn,   sizeof(NormalMapEffect_VSNormalPixelLightingTxBn)   },
-    { NormalMapEffect_VSNormalPixelLightingTxVcBn, sizeof(NormalMapEffect_VSNormalPixelLightingTxVcBn) },
+    { NormalMapEffect_VSNormalPixelLightingTxBn,         sizeof(NormalMapEffect_VSNormalPixelLightingTxBn)         },
+    { NormalMapEffect_VSNormalPixelLightingTxVcBn,       sizeof(NormalMapEffect_VSNormalPixelLightingTxVcBn)       },
+
+    { NormalMapEffect_VSNormalPixelLightingTxNoSpec,     sizeof(NormalMapEffect_VSNormalPixelLightingTxNoSpec)     },
+    { NormalMapEffect_VSNormalPixelLightingTxVcNoSpec,   sizeof(NormalMapEffect_VSNormalPixelLightingTxVcNoSpec)   },
+
+    { NormalMapEffect_VSNormalPixelLightingTxNoSpecBn,   sizeof(NormalMapEffect_VSNormalPixelLightingTxNoSpecBn)   },
+    { NormalMapEffect_VSNormalPixelLightingTxVcNoSpecBn, sizeof(NormalMapEffect_VSNormalPixelLightingTxVcNoSpecBn) },
 };
 
 
+template<>
 const int EffectBase<NormalMapEffectTraits>::VertexShaderIndices[] =
 {
     0,     // pixel lighting + texture
@@ -131,23 +142,24 @@ const int EffectBase<NormalMapEffectTraits>::VertexShaderIndices[] =
     1,     // pixel lighting + texture + vertex color
     1,     // pixel lighting + texture + vertex color, no fog
 
-    0,     // pixel lighting + texture, no specular
-    0,     // pixel lighting + texture, no fog or specular
-    1,     // pixel lighting + texture + vertex color, no specular
-    1,     // pixel lighting + texture + vertex color, no fog or specular
+    4,     // pixel lighting + texture, no specular
+    4,     // pixel lighting + texture, no fog or specular
+    5,     // pixel lighting + texture + vertex color, no specular
+    5,     // pixel lighting + texture + vertex color, no fog or specular
 
-    2,     // pixel lighting (biased vertex normal/tangent) + texture
-    2,     // pixel lighting (biased vertex normal/tangent) + texture, no fog
-    3,     // pixel lighting (biased vertex normal/tangent) + texture + vertex color
-    3,     // pixel lighting (biased vertex normal/tangent) + texture + vertex color, no fog
+    2,     // pixel lighting (biased vertex normal) + texture
+    2,     // pixel lighting (biased vertex normal) + texture, no fog
+    3,     // pixel lighting (biased vertex normal) + texture + vertex color
+    3,     // pixel lighting (biased vertex normal) + texture + vertex color, no fog
 
-    2,     // pixel lighting (biased vertex normal/tangent) + texture, no specular
-    2,     // pixel lighting (biased vertex normal/tangent) + texture, no fog or specular
-    3,     // pixel lighting (biased vertex normal/tangent) + texture + vertex color, no specular
-    3,     // pixel lighting (biased vertex normal/tangent) + texture + vertex color, no fog or specular
+    6,     // pixel lighting (biased vertex normal) + texture, no specular
+    6,     // pixel lighting (biased vertex normal) + texture, no fog or specular
+    7,     // pixel lighting (biased vertex normal) + texture + vertex color, no specular
+    7,     // pixel lighting (biased vertex normal) + texture + vertex color, no fog or specular
 };
 
 
+template<>
 const D3D12_SHADER_BYTECODE EffectBase<NormalMapEffectTraits>::PixelShaderBytecode[] =
 {
     { NormalMapEffect_PSNormalPixelLightingTx,          sizeof(NormalMapEffect_PSNormalPixelLightingTx)          },
@@ -157,6 +169,7 @@ const D3D12_SHADER_BYTECODE EffectBase<NormalMapEffectTraits>::PixelShaderByteco
 };
 
 
+template<>
 const int EffectBase<NormalMapEffectTraits>::PixelShaderIndices[] =
 {
     0,      // pixel lighting + texture
@@ -169,92 +182,106 @@ const int EffectBase<NormalMapEffectTraits>::PixelShaderIndices[] =
     2,     // pixel lighting + texture + vertex color, no specular
     3,     // pixel lighting + texture + vertex color, no fog or specular
 
-    0,      // pixel lighting (biased vertex normal/tangent) + texture
-    1,      // pixel lighting (biased vertex normal/tangent) + texture, no fog
-    0,      // pixel lighting (biased vertex normal/tangent) + texture + vertex color
-    1,      // pixel lighting (biased vertex normal/tangent) + texture + vertex color, no fog
+    0,      // pixel lighting (biased vertex normal) + texture
+    1,      // pixel lighting (biased vertex normal) + texture, no fog
+    0,      // pixel lighting (biased vertex normal) + texture + vertex color
+    1,      // pixel lighting (biased vertex normal) + texture + vertex color, no fog
 
-    2,     // pixel lighting (biased vertex normal/tangent) + texture, no specular
-    3,     // pixel lighting (biased vertex normal/tangent) + texture, no fog or specular
-    2,     // pixel lighting (biased vertex normal/tangent) + texture + vertex color, no specular
-    3,     // pixel lighting (biased vertex normal/tangent) + texture + vertex color, no fog or specular
+    2,     // pixel lighting (biased vertex normal) + texture, no specular
+    3,     // pixel lighting (biased vertex normal) + texture, no fog or specular
+    2,     // pixel lighting (biased vertex normal) + texture + vertex color, no specular
+    3,     // pixel lighting (biased vertex normal) + texture + vertex color, no fog or specular
 };
 
 // Global pool of per-device NormalMapEffect resources.
-SharedResourcePool<ID3D12Device*, EffectBase<NormalMapEffectTraits>::DeviceResources> EffectBase<NormalMapEffectTraits>::deviceResourcesPool;
+template<>
+SharedResourcePool<ID3D12Device*, EffectBase<NormalMapEffectTraits>::DeviceResources> EffectBase<NormalMapEffectTraits>::deviceResourcesPool = {};
 
 
 // Constructor.
-NormalMapEffect::Impl::Impl(_In_ ID3D12Device* device, int effectFlags, const EffectPipelineStateDescription& pipelineDescription, bool specularMap)
+NormalMapEffect::Impl::Impl(_In_ ID3D12Device* device, int effectFlags, const EffectPipelineStateDescription& pipelineDescription, bool ispecularMap)
     : EffectBase(device),
-    specularMap(specularMap),
+    specularMap(ispecularMap),
     texture{},
     specular{},
     normal{},
     sampler{}
 {
-    static_assert( _countof(EffectBase<NormalMapEffectTraits>::VertexShaderIndices) == NormalMapEffectTraits::ShaderPermutationCount, "array/max mismatch" );
-    static_assert( _countof(EffectBase<NormalMapEffectTraits>::VertexShaderBytecode) == NormalMapEffectTraits::VertexShaderCount, "array/max mismatch" );
-    static_assert( _countof(EffectBase<NormalMapEffectTraits>::PixelShaderBytecode) == NormalMapEffectTraits::PixelShaderCount, "array/max mismatch" );
-    static_assert( _countof(EffectBase<NormalMapEffectTraits>::PixelShaderIndices) == NormalMapEffectTraits::ShaderPermutationCount, "array/max mismatch" );
+    static_assert(_countof(EffectBase<NormalMapEffectTraits>::VertexShaderIndices) == NormalMapEffectTraits::ShaderPermutationCount, "array/max mismatch");
+    static_assert(_countof(EffectBase<NormalMapEffectTraits>::VertexShaderBytecode) == NormalMapEffectTraits::VertexShaderCount, "array/max mismatch");
+    static_assert(_countof(EffectBase<NormalMapEffectTraits>::PixelShaderBytecode) == NormalMapEffectTraits::PixelShaderCount, "array/max mismatch");
+    static_assert(_countof(EffectBase<NormalMapEffectTraits>::PixelShaderIndices) == NormalMapEffectTraits::ShaderPermutationCount, "array/max mismatch");
 
     lights.InitializeConstants(constants.specularColorAndPower, constants.lightDirection, constants.lightDiffuseColor, constants.lightSpecularColor);
 
-    // Create root signature
+    // Create root signature.
     {
         D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags =
-            D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT | // Only the input assembler stage needs access to the constant buffer.
+            D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
             D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
             D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS |
             D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS;
 
-        CD3DX12_ROOT_PARAMETER rootParameters[RootParameterIndex::RootParameterCount];
+        CD3DX12_ROOT_PARAMETER rootParameters[RootParameterIndex::RootParameterCount] = {};
         CD3DX12_DESCRIPTOR_RANGE textureSRV(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0);
-        rootParameters[RootParameterIndex::TextureSRV].InitAsDescriptorTable(1, &textureSRV);
+        rootParameters[RootParameterIndex::TextureSRV].InitAsDescriptorTable(1, &textureSRV, D3D12_SHADER_VISIBILITY_PIXEL);
 
         CD3DX12_DESCRIPTOR_RANGE textureSRV2(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 1);
-        rootParameters[RootParameterIndex::TextureSpecularSRV].InitAsDescriptorTable(1, &textureSRV2);
-
-        CD3DX12_DESCRIPTOR_RANGE textureSRV3(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 2);
-        rootParameters[RootParameterIndex::TextureNormalSRV].InitAsDescriptorTable(1, &textureSRV3);
+        rootParameters[RootParameterIndex::TextureNormalSRV].InitAsDescriptorTable(1, &textureSRV2, D3D12_SHADER_VISIBILITY_PIXEL);
 
         CD3DX12_DESCRIPTOR_RANGE textureSampler(D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER, 1, 0);
-        rootParameters[RootParameterIndex::TextureSampler].InitAsDescriptorTable(1, &textureSampler);
+        rootParameters[RootParameterIndex::TextureSampler].InitAsDescriptorTable(1, &textureSampler, D3D12_SHADER_VISIBILITY_PIXEL);
         rootParameters[RootParameterIndex::ConstantBuffer].InitAsConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_ALL);
 
         CD3DX12_ROOT_SIGNATURE_DESC rsigDesc = {};
-        rsigDesc.Init(_countof(rootParameters), rootParameters, 0, nullptr, rootSignatureFlags);
 
-        mRootSignature = GetRootSignature(0, rsigDesc);
+        if (specularMap)
+        {
+            CD3DX12_DESCRIPTOR_RANGE textureSRV3(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 2);
+            rootParameters[RootParameterIndex::TextureSpecularSRV].InitAsDescriptorTable(1, &textureSRV3, D3D12_SHADER_VISIBILITY_PIXEL);
+
+            rsigDesc.Init(_countof(rootParameters), rootParameters, 0, nullptr, rootSignatureFlags);
+
+            mRootSignature = GetRootSignature(1, rsigDesc);
+        }
+        else
+        {
+            rsigDesc.Init(_countof(rootParameters) - 1, rootParameters, 0, nullptr, rootSignatureFlags);
+
+            mRootSignature = GetRootSignature(0, rsigDesc);
+        }
     }
 
-    assert(mRootSignature != 0);
+    assert(mRootSignature != nullptr);
 
     fog.enabled = (effectFlags & EffectFlags::Fog) != 0;
-    biasedVertexNormals = (effectFlags & EffectFlags::BiasedVertexNormals) != 0;
 
-    // Create pipeline state
+    // Create pipeline state.
     int sp = GetPipelineStatePermutation(
-        (effectFlags & EffectFlags::VertexColor) != 0);
+        (effectFlags & EffectFlags::VertexColor) != 0,
+        (effectFlags & EffectFlags::BiasedVertexNormals) != 0);
     assert(sp >= 0 && sp < NormalMapEffectTraits::ShaderPermutationCount);
+    _Analysis_assume_(sp >= 0 && sp < NormalMapEffectTraits::ShaderPermutationCount);
 
     int vi = EffectBase<NormalMapEffectTraits>::VertexShaderIndices[sp];
     assert(vi >= 0 && vi < NormalMapEffectTraits::VertexShaderCount);
+    _Analysis_assume_(vi >= 0 && vi < NormalMapEffectTraits::VertexShaderCount);
     int pi = EffectBase<NormalMapEffectTraits>::PixelShaderIndices[sp];
     assert(pi >= 0 && pi < NormalMapEffectTraits::PixelShaderCount);
+    _Analysis_assume_(pi >= 0 && pi < NormalMapEffectTraits::PixelShaderCount);
 
     pipelineDescription.CreatePipelineState(
         device,
         mRootSignature,
         EffectBase<NormalMapEffectTraits>::VertexShaderBytecode[vi],
         EffectBase<NormalMapEffectTraits>::PixelShaderBytecode[pi],
-        mPipelineState.ReleaseAndGetAddressOf());
+        mPipelineState.GetAddressOf());
 
     SetDebugObjectName(mPipelineState.Get(), L"NormalMapEffect");
 }
 
 
-int NormalMapEffect::Impl::GetPipelineStatePermutation(bool vertexColorEnabled) const
+int NormalMapEffect::Impl::GetPipelineStatePermutation(bool vertexColorEnabled, bool biasedVertexNormals) const
 {
     int permutation = 0;
 
@@ -271,14 +298,14 @@ int NormalMapEffect::Impl::GetPipelineStatePermutation(bool vertexColorEnabled) 
     }
 
     // Specular map?
-    if (specularMap)
+    if (!specularMap)
     {
         permutation += 4;
     }
 
     if (biasedVertexNormals)
     {
-        // Compressed normals & tangents need to be scaled and biased in the vertex shader.
+        // Compressed normals need to be scaled and biased in the vertex shader.
         permutation += 8;
     }
 
@@ -300,12 +327,13 @@ void NormalMapEffect::Impl::Apply(_In_ ID3D12GraphicsCommandList* commandList)
     commandList->SetGraphicsRootSignature(mRootSignature);
 
     // Set the texture
-    // **NOTE** If D3D asserts or crashes here, you probably need to call commandList->SetDescriptorHeaps() with the required descriptor heaps.
     if (!texture.ptr || !sampler.ptr || !normal.ptr)
     {
         DebugTrace("ERROR: Missing texture(s) or sampler for NormalMapEffect (texture %llu, normal %llu, sampler %llu)\n", texture.ptr, normal.ptr, sampler.ptr);
         throw std::exception("NormalMapEffect");
     }
+
+    // **NOTE** If D3D asserts or crashes here, you probably need to call commandList->SetDescriptorHeaps() with the required descriptor heaps.
     commandList->SetGraphicsRootDescriptorTable(RootParameterIndex::TextureSRV, texture);
     commandList->SetGraphicsRootDescriptorTable(RootParameterIndex::TextureNormalSRV, normal);
     commandList->SetGraphicsRootDescriptorTable(RootParameterIndex::TextureSampler, sampler);
@@ -330,20 +358,20 @@ void NormalMapEffect::Impl::Apply(_In_ ID3D12GraphicsCommandList* commandList)
 
 // Public constructor.
 NormalMapEffect::NormalMapEffect(_In_ ID3D12Device* device, int effectFlags, const EffectPipelineStateDescription& pipelineDescription, bool specularMap)
-  : pImpl(new Impl(device, effectFlags, pipelineDescription, specularMap))
+  : pImpl(std::make_unique<Impl>(device, effectFlags, pipelineDescription, specularMap))
 {
 }
 
 
 // Move constructor.
-NormalMapEffect::NormalMapEffect(NormalMapEffect&& moveFrom)
+NormalMapEffect::NormalMapEffect(NormalMapEffect&& moveFrom) noexcept
   : pImpl(std::move(moveFrom.pImpl))
 {
 }
 
 
 // Move assignment.
-NormalMapEffect& NormalMapEffect::operator= (NormalMapEffect&& moveFrom)
+NormalMapEffect& NormalMapEffect::operator= (NormalMapEffect&& moveFrom) noexcept
 {
     pImpl = std::move(moveFrom.pImpl);
     return *this;
@@ -545,5 +573,10 @@ void NormalMapEffect::SetNormalTexture(D3D12_GPU_DESCRIPTOR_HANDLE srvDescriptor
 
 void NormalMapEffect::SetSpecularTexture(D3D12_GPU_DESCRIPTOR_HANDLE srvDescriptor)
 {
+    if (!pImpl->specularMap)
+    {
+        DebugTrace("WARNING: Specular texture set on NormalMapEffect instance created without specular shader (texture %llu)\n", srvDescriptor.ptr);
+    }
+
     pImpl->specular = srvDescriptor;
 }

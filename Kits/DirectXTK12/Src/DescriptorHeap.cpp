@@ -1,12 +1,8 @@
 //--------------------------------------------------------------------------------------
 // File: DescriptorHeap.cpp
 //
-// THIS CODE AND INFORMATION IS PROVIDED "AS IS" WITHOUT WARRANTY OF
-// ANY KIND, EITHER EXPRESSED OR IMPLIED, INCLUDING BUT NOT LIMITED TO
-// THE IMPLIED WARRANTIES OF MERCHANTABILITY AND/OR FITNESS FOR A
-// PARTICULAR PURPOSE.
-//
 // Copyright (c) Microsoft Corporation. All rights reserved.
+// Licensed under the MIT License.
 //
 // http://go.microsoft.com/fwlink/?LinkID=615561
 //--------------------------------------------------------------------------------------
@@ -54,7 +50,11 @@ DescriptorHeap::DescriptorHeap(
 _Use_decl_annotations_
 DescriptorHeap::DescriptorHeap(
     ID3D12Device* device,
-    const D3D12_DESCRIPTOR_HEAP_DESC* pDesc)
+    const D3D12_DESCRIPTOR_HEAP_DESC* pDesc) :
+    m_desc{},
+    m_hCPU{},
+    m_hGPU{},
+    m_increment(0)
 {
     Create(device, pDesc);
 }
@@ -64,8 +64,15 @@ DescriptorHeap::DescriptorHeap(
     ID3D12Device* device,
     D3D12_DESCRIPTOR_HEAP_TYPE type,
     D3D12_DESCRIPTOR_HEAP_FLAGS flags,
-    size_t count)
+    size_t count) :
+    m_desc{},
+    m_hCPU{},
+    m_hGPU{},
+    m_increment(0)
 {
+    if (count > UINT32_MAX)
+        throw std::exception("Too many descriptors");
+
     D3D12_DESCRIPTOR_HEAP_DESC desc = {};
     desc.Flags = flags;
     desc.NumDescriptors = static_cast<UINT>(count);
@@ -82,7 +89,7 @@ D3D12_GPU_DESCRIPTOR_HANDLE DescriptorHeap::WriteDescriptors(
     const uint32_t* pDescriptorRangeSizes,
     uint32_t descriptorRangeCount)
 {
-    assert(size_t(offsetIntoHeap + totalDescriptorCount) <= size_t(m_desc.NumDescriptors));
+    assert((size_t(offsetIntoHeap) + size_t(totalDescriptorCount)) <= size_t(m_desc.NumDescriptors));
 
     D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle = GetCpuHandle(offsetIntoHeap);
 
@@ -99,7 +106,7 @@ D3D12_GPU_DESCRIPTOR_HANDLE DescriptorHeap::WriteDescriptors(
 
     return gpuHandle;
 }
-    
+
 _Use_decl_annotations_
 D3D12_GPU_DESCRIPTOR_HANDLE DescriptorHeap::WriteDescriptors(
     ID3D12Device* device,
@@ -140,30 +147,30 @@ D3D12_GPU_DESCRIPTOR_HANDLE DescriptorHeap::WriteDescriptors(
 _Use_decl_annotations_
 void DescriptorHeap::Create(
     ID3D12Device* pDevice,
-    const D3D12_DESCRIPTOR_HEAP_DESC* pDesc )
+    const D3D12_DESCRIPTOR_HEAP_DESC* pDesc)
 {
-    assert( pDesc != 0 );
+    assert(pDesc != nullptr);
 
     m_desc = *pDesc;
-    m_increment = pDevice->GetDescriptorHandleIncrementSize( pDesc->Type );
+    m_increment = pDevice->GetDescriptorHandleIncrementSize(pDesc->Type);
 
     if (pDesc->NumDescriptors == 0)
     {
         m_pHeap.Reset();
-        m_hCPU = CD3DX12_CPU_DESCRIPTOR_HANDLE(D3D12_DEFAULT);
-        m_hGPU = CD3DX12_GPU_DESCRIPTOR_HANDLE(D3D12_DEFAULT);
+        m_hCPU.ptr = 0;
+        m_hGPU.ptr = 0;
     }
     else
     {
-        ThrowIfFailed( pDevice->CreateDescriptorHeap(
+        ThrowIfFailed(pDevice->CreateDescriptorHeap(
             pDesc,
-            IID_GRAPHICS_PPV_ARGS( m_pHeap.ReleaseAndGetAddressOf() ) ) );
+            IID_GRAPHICS_PPV_ARGS(m_pHeap.ReleaseAndGetAddressOf())));
 
         SetDebugObjectName(m_pHeap.Get(), L"DescriptorHeap");
 
         m_hCPU = m_pHeap->GetCPUDescriptorHandleForHeapStart();
 
-        if ( pDesc->Flags & D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE )
+        if (pDesc->Flags & D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE)
             m_hGPU = m_pHeap->GetGPUDescriptorHandleForHeapStart();
 
     }
@@ -178,4 +185,32 @@ void DescriptorHeap::DefaultDesc(
     pDesc->Flags = c_DescriptorHeapDescs[type].Flags;
     pDesc->NumDescriptors = 0;
     pDesc->Type = type;
+}
+
+
+//======================================================================================
+// DescriptorPile
+//======================================================================================
+
+void DescriptorPile::AllocateRange(size_t numDescriptors, _Out_ IndexType& start, _Out_ IndexType& end)
+{
+    // make sure we didn't allocate zero
+    if (numDescriptors == 0)
+    {
+        throw std::out_of_range("Can't allocate zero descriptors");
+    }
+
+    // get the current top
+    start = m_top;
+
+    // increment top with new request
+    m_top += numDescriptors;
+    end = m_top;
+
+    // make sure we have enough room
+    if (m_top > Count())
+    {
+        DebugTrace("DescriptorPile has %zu of %zu descriptors; failed request for %zu more\n", start, Count(), numDescriptors);
+        throw std::exception("Can't allocate more descriptors");
+    }
 }

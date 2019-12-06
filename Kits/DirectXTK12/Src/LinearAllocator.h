@@ -32,14 +32,10 @@
 //
 //      allocator.RetirePages();
 //      allocator.InsertFences( pContext, 0 );
-//      DXGIXPresentArray(...);
-//
-// THIS CODE AND INFORMATION IS PROVIDED "AS IS" WITHOUT WARRANTY OF
-// ANY KIND, EITHER EXPRESSED OR IMPLIED, INCLUDING BUT NOT LIMITED TO
-// THE IMPLIED WARRANTIES OF MERCHANTABILITY AND/OR FITNESS FOR A
-// PARTICULAR PURPOSE.
+//      Present(...);
 //
 // Copyright (c) Microsoft Corporation. All rights reserved.
+// Licensed under the MIT License.
 //
 // http://go.microsoft.com/fwlink/?LinkID=615561
 //--------------------------------------------------------------------------------------
@@ -54,7 +50,13 @@ namespace DirectX
     class LinearAllocatorPage
     {
     public:
-        LinearAllocatorPage();
+        LinearAllocatorPage() noexcept;
+
+        LinearAllocatorPage(LinearAllocatorPage&&) = delete;
+        LinearAllocatorPage& operator= (LinearAllocatorPage&&) = delete;
+
+        LinearAllocatorPage(LinearAllocatorPage const&) = delete;
+        LinearAllocatorPage& operator=(LinearAllocatorPage const&) = delete;
 
         size_t Suballocate(_In_ size_t size, _In_ size_t alignment);
 
@@ -97,13 +99,13 @@ namespace DirectX
             _In_ size_t pageSize,
             _In_ size_t preallocateBytes = 0);
 
-        LinearAllocator(const LinearAllocator& m) = delete;
-        LinearAllocator& operator = (const LinearAllocator& m) = delete;
+        LinearAllocator(LinearAllocator&&) = default;
+        LinearAllocator& operator= (LinearAllocator&&) = default;
+
+        LinearAllocator(LinearAllocator const&) = delete;
+        LinearAllocator& operator=(LinearAllocator const&) = delete;
 
         ~LinearAllocator();
-
-        // Allow move semantics on this object.
-        LinearAllocator(LinearAllocator&& m) = default;
 
         LinearAllocatorPage* FindPageForAlloc(_In_ size_t requestedSize, _In_ size_t alignment);
 

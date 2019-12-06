@@ -1,10 +1,10 @@
 //--------------------------------------------------------------------------------------
 // SkyboxEffect_Common.hlsli
 //
-// A simple flimic tonemapping effect for DirectX 12.
+// A sky box rendering helper.
 //
-// Advanced Technology Group (ATG)
-// Copyright (C) Microsoft Corporation. All rights reserved.
+// Copyright (c) Microsoft Corporation. All rights reserved.
+// Licensed under the MIT License.
 //--------------------------------------------------------------------------------------
 
 #ifndef __SKYBOXEFFECT_COMMON_HLSLI__

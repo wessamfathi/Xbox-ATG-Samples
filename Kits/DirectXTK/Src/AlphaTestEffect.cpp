@@ -1,12 +1,8 @@
 //--------------------------------------------------------------------------------------
 // File: AlphaTestEffect.cpp
 //
-// THIS CODE AND INFORMATION IS PROVIDED "AS IS" WITHOUT WARRANTY OF
-// ANY KIND, EITHER EXPRESSED OR IMPLIED, INCLUDING BUT NOT LIMITED TO
-// THE IMPLIED WARRANTIES OF MERCHANTABILITY AND/OR FITNESS FOR A
-// PARTICULAR PURPOSE.
-//
 // Copyright (c) Microsoft Corporation. All rights reserved.
+// Licensed under the MIT License.
 //
 // http://go.microsoft.com/fwlink/?LinkId=248929
 //--------------------------------------------------------------------------------------
@@ -27,13 +23,13 @@ struct AlphaTestEffectConstants
     XMMATRIX worldViewProj;
 };
 
-static_assert( ( sizeof(AlphaTestEffectConstants) % 16 ) == 0, "CB size not padded correctly" );
+static_assert((sizeof(AlphaTestEffectConstants) % 16) == 0, "CB size not padded correctly");
 
 
 // Traits type describes our characteristics to the EffectBase template.
 struct AlphaTestEffectTraits
 {
-    typedef AlphaTestEffectConstants ConstantBufferType;
+    using ConstantBufferType = AlphaTestEffectConstants;
 
     static const int VertexShaderCount = 4;
     static const int PixelShaderCount = 4;
@@ -87,6 +83,7 @@ namespace
 }
 
 
+template<>
 const ShaderBytecode EffectBase<AlphaTestEffectTraits>::VertexShaderBytecode[] =
 {
     { AlphaTestEffect_VSAlphaTest,        sizeof(AlphaTestEffect_VSAlphaTest)        },
@@ -96,6 +93,7 @@ const ShaderBytecode EffectBase<AlphaTestEffectTraits>::VertexShaderBytecode[] =
 };
 
 
+template<>
 const int EffectBase<AlphaTestEffectTraits>::VertexShaderIndices[] =
 {
     0,      // lt/gt
@@ -110,6 +108,7 @@ const int EffectBase<AlphaTestEffectTraits>::VertexShaderIndices[] =
 };
 
 
+template<>
 const ShaderBytecode EffectBase<AlphaTestEffectTraits>::PixelShaderBytecode[] =
 {
     { AlphaTestEffect_PSAlphaTestLtGt,      sizeof(AlphaTestEffect_PSAlphaTestLtGt)      },
@@ -119,6 +118,7 @@ const ShaderBytecode EffectBase<AlphaTestEffectTraits>::PixelShaderBytecode[] =
 };
 
 
+template<>
 const int EffectBase<AlphaTestEffectTraits>::PixelShaderIndices[] =
 {
     0,      // lt/gt
@@ -134,7 +134,8 @@ const int EffectBase<AlphaTestEffectTraits>::PixelShaderIndices[] =
 
 
 // Global pool of per-device AlphaTestEffect resources.
-SharedResourcePool<ID3D11Device*, EffectBase<AlphaTestEffectTraits>::DeviceResources> EffectBase<AlphaTestEffectTraits>::deviceResourcesPool;
+template<>
+SharedResourcePool<ID3D11Device*, EffectBase<AlphaTestEffectTraits>::DeviceResources> EffectBase<AlphaTestEffectTraits>::deviceResourcesPool = {};
 
 
 // Constructor.
@@ -144,10 +145,10 @@ AlphaTestEffect::Impl::Impl(_In_ ID3D11Device* device)
     referenceAlpha(0),
     vertexColorEnabled(false)
 {
-    static_assert( _countof(EffectBase<AlphaTestEffectTraits>::VertexShaderIndices) == AlphaTestEffectTraits::ShaderPermutationCount, "array/max mismatch" );
-    static_assert( _countof(EffectBase<AlphaTestEffectTraits>::VertexShaderBytecode) == AlphaTestEffectTraits::VertexShaderCount, "array/max mismatch" );
-    static_assert( _countof(EffectBase<AlphaTestEffectTraits>::PixelShaderBytecode) == AlphaTestEffectTraits::PixelShaderCount, "array/max mismatch" );
-    static_assert( _countof(EffectBase<AlphaTestEffectTraits>::PixelShaderIndices) == AlphaTestEffectTraits::ShaderPermutationCount, "array/max mismatch" );
+    static_assert(_countof(EffectBase<AlphaTestEffectTraits>::VertexShaderIndices) == AlphaTestEffectTraits::ShaderPermutationCount, "array/max mismatch");
+    static_assert(_countof(EffectBase<AlphaTestEffectTraits>::VertexShaderBytecode) == AlphaTestEffectTraits::VertexShaderCount, "array/max mismatch");
+    static_assert(_countof(EffectBase<AlphaTestEffectTraits>::PixelShaderBytecode) == AlphaTestEffectTraits::PixelShaderCount, "array/max mismatch");
+    static_assert(_countof(EffectBase<AlphaTestEffectTraits>::PixelShaderIndices) == AlphaTestEffectTraits::ShaderPermutationCount, "array/max mismatch");
 }
 
 
@@ -192,16 +193,16 @@ void AlphaTestEffect::Impl::Apply(_In_ ID3D11DeviceContext* deviceContext)
     if (dirtyFlags & EffectDirtyFlags::AlphaTest)
     {
         // Convert reference alpha from 8 bit integer to 0-1 float format.
-        float reference = (float)referenceAlpha / 255.0f;
+        auto reference = static_cast<float>(referenceAlpha) / 255.0f;
                 
         // Comparison tolerance of half the 8 bit integer precision.
         const float threshold = 0.5f / 255.0f;
 
         // What to do if the alpha comparison passes or fails. Positive accepts the pixel, negative clips it.
-        static const XMVECTORF32 selectIfTrue  = {  1, -1 };
-        static const XMVECTORF32 selectIfFalse = { -1,  1 };
-        static const XMVECTORF32 selectNever   = { -1, -1 };
-        static const XMVECTORF32 selectAlways  = {  1,  1 };
+        static const XMVECTORF32 selectIfTrue  = { { {  1, -1 } } };
+        static const XMVECTORF32 selectIfFalse = { { { -1,  1 } } };
+        static const XMVECTORF32 selectNever   = { { { -1, -1 } } };
+        static const XMVECTORF32 selectAlways  = { { {  1,  1 } } };
 
         float compareTo;
         XMVECTOR resultSelector;
@@ -279,20 +280,20 @@ void AlphaTestEffect::Impl::Apply(_In_ ID3D11DeviceContext* deviceContext)
 
 // Public constructor.
 AlphaTestEffect::AlphaTestEffect(_In_ ID3D11Device* device)
-  : pImpl(new Impl(device))
+  : pImpl(std::make_unique<Impl>(device))
 {
 }
 
 
 // Move constructor.
-AlphaTestEffect::AlphaTestEffect(AlphaTestEffect&& moveFrom)
+AlphaTestEffect::AlphaTestEffect(AlphaTestEffect&& moveFrom) noexcept
   : pImpl(std::move(moveFrom.pImpl))
 {
 }
 
 
 // Move assignment.
-AlphaTestEffect& AlphaTestEffect::operator= (AlphaTestEffect&& moveFrom)
+AlphaTestEffect& AlphaTestEffect::operator= (AlphaTestEffect&& moveFrom) noexcept
 {
     pImpl = std::move(moveFrom.pImpl);
     return *this;

@@ -1,12 +1,8 @@
 //--------------------------------------------------------------------------------------
 // File: GraphicsMemory.h
 //
-// THIS CODE AND INFORMATION IS PROVIDED "AS IS" WITHOUT WARRANTY OF
-// ANY KIND, EITHER EXPRESSED OR IMPLIED, INCLUDING BUT NOT LIMITED TO
-// THE IMPLIED WARRANTIES OF MERCHANTABILITY AND/OR FITNESS FOR A
-// PARTICULAR PURPOSE.
-//
 // Copyright (c) Microsoft Corporation. All rights reserved.
+// Licensed under the MIT License.
 //
 // http://go.microsoft.com/fwlink/?LinkID=615561
 //--------------------------------------------------------------------------------------
@@ -19,7 +15,7 @@
 #include <d3d12.h>
 #endif
 
-#include <utility>
+#include <memory>
 
 
 namespace DirectX
@@ -31,7 +27,7 @@ namespace DirectX
     class GraphicsResource
     {
     public:
-        GraphicsResource();
+        GraphicsResource() noexcept;
         GraphicsResource(
             _In_ LinearAllocatorPage* page,
             _In_ D3D12_GPU_VIRTUAL_ADDRESS gpuAddress,
@@ -40,8 +36,8 @@ namespace DirectX
             _In_ size_t offset,
             _In_ size_t size);
 
-        GraphicsResource(GraphicsResource&& other);
-        GraphicsResource&& operator= (GraphicsResource&&);
+        GraphicsResource(GraphicsResource&& other) noexcept;
+        GraphicsResource&& operator= (GraphicsResource&&) noexcept;
 
         GraphicsResource(const GraphicsResource&) = delete;
         GraphicsResource& operator= (const GraphicsResource&) = delete;
@@ -72,10 +68,10 @@ namespace DirectX
     class SharedGraphicsResource
     {
     public:
-        SharedGraphicsResource();
+        SharedGraphicsResource() noexcept;
 
-        SharedGraphicsResource(SharedGraphicsResource&&);
-        SharedGraphicsResource&& operator= (SharedGraphicsResource&&);
+        SharedGraphicsResource(SharedGraphicsResource&&) noexcept;
+        SharedGraphicsResource&& operator= (SharedGraphicsResource&&) noexcept;
 
         SharedGraphicsResource(GraphicsResource&&);
         SharedGraphicsResource&& operator= (GraphicsResource&&);
@@ -96,6 +92,9 @@ namespace DirectX
         
         explicit operator bool () const { return mSharedResource != nullptr; }
 
+        bool operator == (const SharedGraphicsResource& other) const { return mSharedResource.get() == other.mSharedResource.get(); }
+        bool operator != (const SharedGraphicsResource& other) const { return mSharedResource.get() != other.mSharedResource.get(); }
+
         // Clear the pointer. Using operator -> will produce bad results.
         void __cdecl Reset();
         void __cdecl Reset(GraphicsResource&&);
@@ -111,8 +110,8 @@ namespace DirectX
     public:
         explicit GraphicsMemory(_In_ ID3D12Device* device);
 
-        GraphicsMemory(GraphicsMemory&& moveFrom);
-        GraphicsMemory& operator= (GraphicsMemory&& moveFrom);
+        GraphicsMemory(GraphicsMemory&& moveFrom) noexcept;
+        GraphicsMemory& operator= (GraphicsMemory&& moveFrom) noexcept;
 
         GraphicsMemory(GraphicsMemory const&) = delete;
         GraphicsMemory& operator=(GraphicsMemory const&) = delete;
@@ -129,13 +128,13 @@ namespace DirectX
         {
             const size_t alignment = D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT;
             const size_t alignedSize = (sizeof(T) + alignment - 1) & ~(alignment - 1);
-            return std::move(Allocate(alignedSize, alignment));
+            return Allocate(alignedSize, alignment);
         }
         template<typename T> GraphicsResource AllocateConstant(const T& setData)
         {
             GraphicsResource alloc = AllocateConstant<T>();
             memcpy(alloc.Memory(), &setData, sizeof(T));
-            return std::move(alloc);
+            return alloc;
         }
 
         // Submits all the pending one-shot memory to the GPU. 
@@ -149,7 +148,8 @@ namespace DirectX
         void __cdecl GarbageCollect();
 
         // Singleton
-        static GraphicsMemory& __cdecl Get();
+        // Should only use nullptr for single GPU scenarios; mGPU requires a specific device
+        static GraphicsMemory& __cdecl Get(_In_opt_ ID3D12Device* device = nullptr);
 
     private:
         // Private implementation.

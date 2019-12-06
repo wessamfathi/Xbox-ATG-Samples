@@ -1,12 +1,8 @@
 //--------------------------------------------------------------------------------------
 // File: DualTextureEffect.cpp
 //
-// THIS CODE AND INFORMATION IS PROVIDED "AS IS" WITHOUT WARRANTY OF
-// ANY KIND, EITHER EXPRESSED OR IMPLIED, INCLUDING BUT NOT LIMITED TO
-// THE IMPLIED WARRANTIES OF MERCHANTABILITY AND/OR FITNESS FOR A
-// PARTICULAR PURPOSE.
-//
 // Copyright (c) Microsoft Corporation. All rights reserved.
+// Licensed under the MIT License.
 //
 // http://go.microsoft.com/fwlink/?LinkID=615561
 //--------------------------------------------------------------------------------------
@@ -27,13 +23,13 @@ struct DualTextureEffectConstants
     XMMATRIX worldViewProj;
 };
 
-static_assert( ( sizeof(DualTextureEffectConstants) % 16 ) == 0, "CB size not padded correctly" );
+static_assert((sizeof(DualTextureEffectConstants) % 16) == 0, "CB size not padded correctly");
 
 
 // Traits type describes our characteristics to the EffectBase template.
 struct DualTextureEffectTraits
 {
-    typedef DualTextureEffectConstants ConstantBufferType;
+    using ConstantBufferType = DualTextureEffectConstants;
 
     static const int VertexShaderCount = 4;
     static const int PixelShaderCount = 2;
@@ -94,6 +90,7 @@ namespace
 }
 
 
+template<>
 const D3D12_SHADER_BYTECODE EffectBase<DualTextureEffectTraits>::VertexShaderBytecode[] =
 {
     { DualTextureEffect_VSDualTexture,        sizeof(DualTextureEffect_VSDualTexture)        },
@@ -104,6 +101,7 @@ const D3D12_SHADER_BYTECODE EffectBase<DualTextureEffectTraits>::VertexShaderByt
 };
 
 
+template<>
 const int EffectBase<DualTextureEffectTraits>::VertexShaderIndices[] =
 {
     0,      // basic
@@ -113,6 +111,7 @@ const int EffectBase<DualTextureEffectTraits>::VertexShaderIndices[] =
 };
 
 
+template<>
 const D3D12_SHADER_BYTECODE EffectBase<DualTextureEffectTraits>::PixelShaderBytecode[] =
 {
     { DualTextureEffect_PSDualTexture,        sizeof(DualTextureEffect_PSDualTexture)        },
@@ -121,6 +120,7 @@ const D3D12_SHADER_BYTECODE EffectBase<DualTextureEffectTraits>::PixelShaderByte
 };
 
 
+template<>
 const int EffectBase<DualTextureEffectTraits>::PixelShaderIndices[] =
 {
     0,      // basic
@@ -131,7 +131,8 @@ const int EffectBase<DualTextureEffectTraits>::PixelShaderIndices[] =
 
 
 // Global pool of per-device DualTextureEffect resources.
-SharedResourcePool<ID3D12Device*, EffectBase<DualTextureEffectTraits>::DeviceResources> EffectBase<DualTextureEffectTraits>::deviceResourcesPool;
+template<>
+SharedResourcePool<ID3D12Device*, EffectBase<DualTextureEffectTraits>::DeviceResources> EffectBase<DualTextureEffectTraits>::deviceResourcesPool = {};
 
 
 // Constructor.
@@ -147,28 +148,28 @@ DualTextureEffect::Impl::Impl(_In_ ID3D12Device* device, int effectFlags, const 
     static_assert(_countof(EffectBase<DualTextureEffectTraits>::PixelShaderBytecode) == DualTextureEffectTraits::PixelShaderCount, "array/max mismatch");
     static_assert(_countof(EffectBase<DualTextureEffectTraits>::PixelShaderIndices) == DualTextureEffectTraits::ShaderPermutationCount, "array/max mismatch");
     
-    // Create root signature
+    // Create root signature.
     {
         D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags =
-            D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT | // Only the input assembler stage needs access to the constant buffer.
+            D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
             D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
             D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS |
             D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS;
 
-        CD3DX12_ROOT_PARAMETER rootParameters[RootParameterIndex::RootParameterCount];
+        CD3DX12_ROOT_PARAMETER rootParameters[RootParameterIndex::RootParameterCount] = {};
         rootParameters[RootParameterIndex::ConstantBuffer].InitAsConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_ALL);
 
         // Texture 1
         CD3DX12_DESCRIPTOR_RANGE texture1Range(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0);
         CD3DX12_DESCRIPTOR_RANGE texture1SamplerRange(D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER, 1, 0);
-        rootParameters[RootParameterIndex::Texture1SRV].InitAsDescriptorTable(1, &texture1Range);
-        rootParameters[RootParameterIndex::Texture1Sampler].InitAsDescriptorTable(1, &texture1SamplerRange);
+        rootParameters[RootParameterIndex::Texture1SRV].InitAsDescriptorTable(1, &texture1Range, D3D12_SHADER_VISIBILITY_PIXEL);
+        rootParameters[RootParameterIndex::Texture1Sampler].InitAsDescriptorTable(1, &texture1SamplerRange, D3D12_SHADER_VISIBILITY_PIXEL);
 
         // Texture 2
         CD3DX12_DESCRIPTOR_RANGE texture2Range(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 1);
         CD3DX12_DESCRIPTOR_RANGE texture2SamplerRange(D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER, 1, 1);
-        rootParameters[RootParameterIndex::Texture2SRV].InitAsDescriptorTable(1, &texture2Range);
-        rootParameters[RootParameterIndex::Texture2Sampler].InitAsDescriptorTable(1, &texture2SamplerRange);
+        rootParameters[RootParameterIndex::Texture2SRV].InitAsDescriptorTable(1, &texture2Range, D3D12_SHADER_VISIBILITY_PIXEL);
+        rootParameters[RootParameterIndex::Texture2Sampler].InitAsDescriptorTable(1, &texture2SamplerRange, D3D12_SHADER_VISIBILITY_PIXEL);
 
         // Create the root signature
         CD3DX12_ROOT_SIGNATURE_DESC rsigDesc = {};
@@ -177,9 +178,9 @@ DualTextureEffect::Impl::Impl(_In_ ID3D12Device* device, int effectFlags, const 
         mRootSignature = GetRootSignature(0, rsigDesc);
     }
 
-    assert(mRootSignature != 0);
+    assert(mRootSignature != nullptr);
 
-    // Validate flags & state
+    // Validate flags & state.
     fog.enabled = (effectFlags & EffectFlags::Fog) != 0;
 
     if (effectFlags & EffectFlags::PerPixelLightingBit)
@@ -193,22 +194,25 @@ DualTextureEffect::Impl::Impl(_In_ ID3D12Device* device, int effectFlags, const 
         throw std::invalid_argument("DualTextureEffect");
     }
 
-    // Create pipeline state
+    // Create pipeline state.
     int sp = GetPipelineStatePermutation(
         (effectFlags & EffectFlags::VertexColor) != 0);
     assert(sp >= 0 && sp < DualTextureEffectTraits::ShaderPermutationCount);
+    _Analysis_assume_(sp >= 0 && sp < DualTextureEffectTraits::ShaderPermutationCount);
 
     int vi = EffectBase<DualTextureEffectTraits>::VertexShaderIndices[sp];
     assert(vi >= 0 && vi < DualTextureEffectTraits::VertexShaderCount);
+    _Analysis_assume_(vi >= 0 && vi < DualTextureEffectTraits::VertexShaderCount);
     int pi = EffectBase<DualTextureEffectTraits>::PixelShaderIndices[sp];
     assert(pi >= 0 && pi < DualTextureEffectTraits::PixelShaderCount);
+    _Analysis_assume_(pi >= 0 && pi < DualTextureEffectTraits::PixelShaderCount);
 
     pipelineDescription.CreatePipelineState(
         device,
         mRootSignature,
         EffectBase<DualTextureEffectTraits>::VertexShaderBytecode[vi],
         EffectBase<DualTextureEffectTraits>::PixelShaderBytecode[pi],
-        mPipelineState.ReleaseAndGetAddressOf());
+        mPipelineState.GetAddressOf());
 
     SetDebugObjectName(mPipelineState.Get(), L"DualTextureEffect");
 }
@@ -250,17 +254,18 @@ void DualTextureEffect::Impl::Apply(_In_ ID3D12GraphicsCommandList* commandList)
     commandList->SetGraphicsRootSignature(mRootSignature);
 
     // Set the textures
-    // **NOTE** If D3D asserts or crashes here, you probably need to call commandList->SetDescriptorHeaps() with the required descriptor heaps.
     if (!texture1.ptr || !texture2.ptr)
     {
-        DebugTrace("Missing texture(s) for DualTextureEffect (texture1 %llu, texture2 %llu)\n", texture1.ptr, texture2.ptr);
+        DebugTrace("ERROR: Missing texture(s) for DualTextureEffect (texture1 %llu, texture2 %llu)\n", texture1.ptr, texture2.ptr);
         throw std::exception("DualTextureEffect");
     }
     if (!texture1Sampler.ptr || !texture2Sampler.ptr)
     {
-        DebugTrace("Missing sampler(s) for DualTextureEffect (samplers1 %llu, samplers2 %llu)\n", texture2Sampler.ptr, texture2Sampler.ptr);
+        DebugTrace("ERROR: Missing sampler(s) for DualTextureEffect (samplers1 %llu, samplers2 %llu)\n", texture2Sampler.ptr, texture2Sampler.ptr);
         throw std::exception("DualTextureEffect");
     }
+
+    // **NOTE** If D3D asserts or crashes here, you probably need to call commandList->SetDescriptorHeaps() with the required descriptor heaps.
     commandList->SetGraphicsRootDescriptorTable(RootParameterIndex::Texture1SRV, texture1);
     commandList->SetGraphicsRootDescriptorTable(RootParameterIndex::Texture1Sampler, texture1Sampler);
     commandList->SetGraphicsRootDescriptorTable(RootParameterIndex::Texture2SRV, texture2);
@@ -276,20 +281,20 @@ void DualTextureEffect::Impl::Apply(_In_ ID3D12GraphicsCommandList* commandList)
 
 // Public constructor.
 DualTextureEffect::DualTextureEffect(_In_ ID3D12Device* device, int effectFlags, const EffectPipelineStateDescription& pipelineDescription)
-    : pImpl(new Impl(device, effectFlags, pipelineDescription))
+    : pImpl(std::make_unique<Impl>(device, effectFlags, pipelineDescription))
 {
 }
 
 
 // Move constructor.
-DualTextureEffect::DualTextureEffect(DualTextureEffect&& moveFrom)
+DualTextureEffect::DualTextureEffect(DualTextureEffect&& moveFrom) noexcept
   : pImpl(std::move(moveFrom.pImpl))
 {
 }
 
 
 // Move assignment.
-DualTextureEffect& DualTextureEffect::operator= (DualTextureEffect&& moveFrom)
+DualTextureEffect& DualTextureEffect::operator= (DualTextureEffect&& moveFrom) noexcept
 {
     pImpl = std::move(moveFrom.pImpl);
     return *this;

@@ -11,12 +11,8 @@
 // For a full-featured DDS file reader, writer, and texture processing pipeline see
 // the 'Texconv' sample and the 'DirectXTex' library.
 //
-// THIS CODE AND INFORMATION IS PROVIDED "AS IS" WITHOUT WARRANTY OF
-// ANY KIND, EITHER EXPRESSED OR IMPLIED, INCLUDING BUT NOT LIMITED TO
-// THE IMPLIED WARRANTIES OF MERCHANTABILITY AND/OR FITNESS FOR A
-// PARTICULAR PURPOSE.
-//
 // Copyright (c) Microsoft Corporation. All rights reserved.
+// Licensed under the MIT License.
 //
 // http://go.microsoft.com/fwlink/?LinkID=615561
 //--------------------------------------------------------------------------------------
@@ -35,7 +31,7 @@
 
 namespace DirectX
 {
-    enum WIC_LOADER_FLAGS
+    enum WIC_LOADER_FLAGS : uint32_t
     {
         WIC_LOADER_DEFAULT      = 0,
         WIC_LOADER_FORCE_SRGB   = 0x1,

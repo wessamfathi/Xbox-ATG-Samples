@@ -1,11 +1,9 @@
-// THIS CODE AND INFORMATION IS PROVIDED "AS IS" WITHOUT WARRANTY OF
-// ANY KIND, EITHER EXPRESSED OR IMPLIED, INCLUDING BUT NOT LIMITED TO
-// THE IMPLIED WARRANTIES OF MERCHANTABILITY AND/OR FITNESS FOR A
-// PARTICULAR PURPOSE.
-//
 // Copyright (c) Microsoft Corporation. All rights reserved.
+// Licensed under the MIT License.
 //
+// http://go.microsoft.com/fwlink/?LinkId=248926
 // http://go.microsoft.com/fwlink/?LinkId=248929
+// http://go.microsoft.com/fwlink/?LinkID=615561
 // http://create.msdn.com/en-US/education/catalog/sample/stock_effects
 
 
@@ -24,12 +22,6 @@ void ApplyFog(inout float4 color, float fogFactor)
 void AddSpecular(inout float4 color, float3 specular)
 {
     color.rgb += specular * color.a;
-}
-
-
-float3 BiasX2(float3 x)
-{
-   return 2.0f * x - 1.0f;
 }
 
 

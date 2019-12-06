@@ -1,3 +1,4 @@
+
 //--------------------------------------------------------------------------------------
 // File: ScreenGrab.h
 //
@@ -8,12 +9,8 @@
 // full-featured texture capture, DDS writer, and texture processing pipeline,
 // see the 'Texconv' sample and the 'DirectXTex' library.
 //
-// THIS CODE AND INFORMATION IS PROVIDED "AS IS" WITHOUT WARRANTY OF
-// ANY KIND, EITHER EXPRESSED OR IMPLIED, INCLUDING BUT NOT LIMITED TO
-// THE IMPLIED WARRANTIES OF MERCHANTABILITY AND/OR FITNESS FOR A
-// PARTICULAR PURPOSE.
-//
 // Copyright (c) Microsoft Corporation. All rights reserved.
+// Licensed under the MIT License.
 //
 // http://go.microsoft.com/fwlink/?LinkId=248926
 // http://go.microsoft.com/fwlink/?LinkId=248929
@@ -27,10 +24,8 @@
 #include <d3d11_1.h>
 #endif
 
-#include <ocidl.h>
-
+#include <OCIdl.h>
 #include <functional>
-#include <stdint.h>
 
 
 namespace DirectX
@@ -46,5 +41,6 @@ namespace DirectX
         _In_ REFGUID guidContainerFormat,
         _In_z_ const wchar_t* fileName,
         _In_opt_ const GUID* targetFormat = nullptr,
-        _In_opt_ std::function<void __cdecl(IPropertyBag2*)> setCustomProps = nullptr);
+        _In_opt_ std::function<void __cdecl(IPropertyBag2*)> setCustomProps = nullptr,
+        _In_ bool forceSRGB = false);
 }
